@@ -101,6 +101,29 @@ export interface SeasonCatalogItem {
     oncePerDay?: boolean;
     /** at most one purchase ever (repairs, housing, production investment). */
     unique?: boolean;
+    /**
+     * 買到手的那一份 —— the physical thing the money bought, registered as a real
+     * WorldObject carried by the buyer.
+     *
+     * Food used to be a number: 「relieve-hunger」 decremented a hunger float and
+     * nothing existed afterwards. That is why the first live seasons read like
+     * everybody was topping up a gauge — the only thing a meal could ever be was
+     * the act of buying it.
+     *
+     * Once the portion is an object, every mechanism the world already has starts
+     * applying to it for free: it can be carried out of the stall, set down, taken
+     * to somebody in another room, and above all HANDED OVER — and a handed object
+     * already warms the bond both ways (贈物暖情). 「替她買了一副生煎」 becomes a
+     * thing that happened, not a line of prose.
+     *
+     * Optional: an item without it behaves exactly as before.
+     */
+    spawnsObject?: {
+        label: string;
+        aliases?: string[];
+        /** its condition the moment it changes hands — 「還燙著，油紙包著」. */
+        state: string;
+    };
 }
 
 export interface SeasonEconomyData {
@@ -386,8 +409,8 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         // purchases (a meal tabbed at noon is the day's meal). Their ids carry
         // item + day + payer, so both checks read off the id alone. With the
         // creditVerbs flag off no tab bill exists, so the guards are unchanged.
-        const tabStamp = `tab:${item.id}:d${req.day}:${payerId}:`;
-        const tabbedToday = (data.bills ?? []).some((bill) => bill.id.startsWith(tabStamp));
+        const tabStampFor = (itemId: string): string => `tab:${itemId}:d${req.day}:${payerId}:`;
+        const tabbedToday = (data.bills ?? []).some((bill) => bill.id.startsWith(tabStampFor(item.id)));
         const tabbedEver = (data.bills ?? []).some((bill) => bill.id.startsWith(`tab:${item.id}:`));
         // a settled sponsorship IS the item being done; a pending one holds the slot
         const sponsorStates = Object.entries(data.sponsorships ?? {})
@@ -399,8 +422,25 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         if (item.unique && sponsorStates.some((s) => s === 'offered')) {
             return fail(`「${item.label}」已有人出資、正等當事人答覆，不能搶辦`);
         }
-        if (item.oncePerDay && (bought.some((t) => t.day === req.day && t.from === payerId) || tabbedToday)) {
-            return fail(`「${item.label}」今日已經用過一次`);
+        // 一日一餐 —— for meals the daily guard spans the whole MENU, not the one
+        // dish. Per-item was harmless while the stall sold two things; the moment
+        // it sold ten, "once per day per item" meant a character could eat ten
+        // times a day and never trip it. What the rule is actually for is the
+        // belly, and there is only one of those.
+        const sameClassIds = item.kind === 'meal'
+            ? new Set(data.catalog.filter((row) => row.kind === 'meal' && row.oncePerDay).map((row) => row.id))
+            : new Set([item.id]);
+        const boughtInClass = sameClassIds.size > 1
+            ? contract.economy.ledger.filter(
+                  (t) => t.kind === 'purchase' && sameClassIds.has(t.memo.slice(0, t.memo.indexOf('|'))),
+              )
+            : bought;
+        // A meal tabbed on credit is the day's meal too, whichever dish it was.
+        const tabbedInClassToday = sameClassIds.size > 1
+            ? (data.bills ?? []).some((bill) => [...sameClassIds].some((id) => bill.id.startsWith(tabStampFor(id))))
+            : tabbedToday;
+        if (item.oncePerDay && (boughtInClass.some((t) => t.day === req.day && t.from === payerId) || tabbedInClassToday)) {
+            return fail(item.kind === 'meal' ? '今日已經吃過一頓了' : `「${item.label}」今日已經用過一次`);
         }
 
         // CONSENT GATE — a benefit aimed at another person never lands unilaterally:
@@ -457,7 +497,7 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         ) {
             const vendorLabel = accountLabel(contract, item.vendorAccountId);
             (data.bills ??= []).push({
-                id: `${tabStamp}${txnId}`,
+                id: `${tabStampFor(item.id)}${txnId}`,
                 label: `賒${item.label}`,
                 amountSubunits: price.toString(),
                 dueDay: req.day + tab.dueDays,
@@ -748,8 +788,42 @@ function sponsorshipBeneficiary(world: WorldState, item: SeasonCatalogItem): str
     return world.idByName(item.effect.characterName);
 }
 
+/**
+ * Register the bought portion as a carried WorldObject.
+ *
+ * Ids are per-purchase (buyer + tick), because two people buying 生煎 at the same
+ * stall are holding two different paper packets — an id shared by item type would
+ * make the second purchase silently overwrite the first person's food.
+ */
+function spawnPurchasedObject(world: WorldState, item: SeasonCatalogItem, req: CommitEconomyCommandRequest): void {
+    const spawn = item.spawnsObject;
+    if (!spawn) return;
+    const sceneId = world.data.roster[req.actorId];
+    if (!sceneId) return;
+    const objects = (world.data.objects ??= []);
+    // causeEventId + seq is the one identifier that is already unique per
+    // committed command; the clock supplies the birth tick.
+    const nowTick = world.data.clock.currentTick;
+    const objectId = `bought-${item.id}-${req.actorId}-${req.causeEventId.replace(/[^\w-]/g, '-')}-${req.seq}`;
+    if (objects.some((object) => object.id === objectId)) return;
+    objects.push({
+        id: objectId,
+        label: spawn.label,
+        aliases: spawn.aliases ?? [],
+        sceneId,
+        portable: true,
+        visibility: 'visible',
+        carriedBy: req.actorId,
+        state: spawn.state,
+        version: 1,
+        knownBy: [],
+        origin: { day: req.day, tick: nowTick, source: 'season' },
+    });
+}
+
 function applyCatalogEffect(world: WorldState, item: SeasonCatalogItem, req: CommitEconomyCommandRequest): void {
     const effect = item.effect;
+    spawnPurchasedObject(world, item, req);
     if (effect.kind === 'relieve-hunger') {
         const member = world.castById(req.actorId);
         if (member) member.state.hunger = Math.max(0, member.state.hunger - 0.6);
@@ -1013,20 +1087,71 @@ function runwayLine(data: SeasonEconomyData, available: bigint, dailyCost: bigin
  * so a seed whose meals are all unanchored yields an EMPTY map and the hunger
  * driver stays completely inert for it. Pure read (no ledger restore).
  */
-export function foodScenesOf(world: WorldState): Map<string, SeasonCatalogItem> {
-    const out = new Map<string, SeasonCatalogItem>();
+/**
+ * 攤子上賣些什麼 — every meal on offer at each food scene, cheapest first.
+ *
+ * This used to collapse to ONE item per scene (the cheapest), which was fine
+ * while a stall sold two dishes and quietly disastrous once it sold ten: the
+ * whole cast ate the same bowl every day because the engine could only see one
+ * bowl. The menu has to survive as a menu all the way to the point of choosing.
+ */
+export function mealsByScene(world: WorldState): Map<string, SeasonCatalogItem[]> {
+    const out = new Map<string, SeasonCatalogItem[]>();
     const data = world.data.economy;
     if (!data) return out;
     for (const item of data.catalog) {
         if (item.kind !== 'meal' || !item.sceneName) continue;
         const scene = world.data.scenes.find((candidate) => candidate.name === item.sceneName);
         if (!scene) continue; // a sceneName that resolves to no real scene is inert
-        const existing = out.get(scene.id);
-        if (!existing || BigInt(item.priceSubunits) < BigInt(existing.priceSubunits)) {
-            out.set(scene.id, item); // keep the cheapest when several are sold there
-        }
+        (out.get(scene.id) ?? out.set(scene.id, []).get(scene.id)!).push(item);
+    }
+    for (const items of out.values()) {
+        items.sort((a, b) => {
+            const pa = BigInt(a.priceSubunits);
+            const pb = BigInt(b.priceSubunits);
+            return pa < pb ? -1 : pa > pb ? 1 : a.id.localeCompare(b.id);
+        });
     }
     return out;
+}
+
+/** The cheapest dish at each food scene — the "can this venue feed me at all"
+ *  question, and the floor price callers budget against. */
+export function foodScenesOf(world: WorldState): Map<string, SeasonCatalogItem> {
+    const out = new Map<string, SeasonCatalogItem>();
+    for (const [sceneId, items] of mealsByScene(world)) {
+        if (items.length) out.set(sceneId, items[0]);
+    }
+    return out;
+}
+
+/**
+ * 挑一樣吃 — which dish THIS person has at THIS stall, given what they can pay.
+ *
+ * Deterministic (hashed off who and what day, so a seed replays exactly) but
+ * spread two ways: across the cast, so thirteen people at one stall do not order
+ * thirteen identical bowls, and across days, so one person does not eat the same
+ * thing every morning for a season.
+ *
+ * Spreads over EVERYTHING they can afford rather than the dearest band. Ordering
+ * the priciest affordable dish sounds more characterful and is really just a new
+ * attractor with better manners — every solvent character eats 蟹粉小食 daily
+ * while the broke ones eat 粢飯糰 daily, and the menu is back to two dishes.
+ * Money still shows: a purse under 2 圓 simply cannot reach most of the board.
+ */
+export function pickMealAt(
+    world: WorldState,
+    sceneId: string,
+    characterId: string,
+    spendable: bigint,
+    /** varies the choice from day to day; omit for a stable per-character pick. */
+    salt: number | string = '',
+): SeasonCatalogItem | undefined {
+    const items = (mealsByScene(world).get(sceneId) ?? []).filter((item) => BigInt(item.priceSubunits) <= spendable);
+    if (!items.length) return undefined;
+    let hash = 0;
+    for (const char of `${characterId}|${salt}`) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+    return items[hash % items.length];
 }
 
 export function economyPerceptFor(world: WorldState, characterId: string, sceneId?: string): string | undefined {
@@ -2085,6 +2210,7 @@ export interface SeasonEconomyFrame {
         vendorAccountId?: string;
         oncePerDay?: boolean;
         unique?: boolean;
+        spawnsObject?: SeasonCatalogItem['spawnsObject'];
     }>;
     contracts?: Array<{
         id: string;
@@ -2274,6 +2400,11 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
             ...(item.vendorAccountId ? { vendorAccountId: item.vendorAccountId } : {}),
             ...(item.oncePerDay ? { oncePerDay: true } : {}),
             ...(item.unique ? { unique: true } : {}),
+            // 買到手的那一份 — omitted here once already, which is how a stall full
+            // of new dishes still produced no food anybody could hold. A
+            // field-by-field mapper silently drops whatever it was not told about;
+            // adding a field to SeasonCatalogItem means adding a line here.
+            ...(item.spawnsObject ? { spawnsObject: item.spawnsObject } : {}),
         })),
         contractObjectIds,
         sponsorships: {},

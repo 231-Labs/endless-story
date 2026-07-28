@@ -410,6 +410,28 @@ function buildVitals(records: LabTickRecord[], world: WorldState | null): string
         );
     }
 
+    // 文風趨同: a different failure from convergence and it needs a different fix —
+    // the cast all WANTING the same thing is a world problem, the cast all WRITING
+    // the same way is a prose problem. They shared a list once, and the grammar
+    // noise in it hid 「聲氣」×13 completely.
+    const tics = new Map<string, { token: string; count: number; characterIds: string[] }>();
+    for (const record of withVitals) {
+        for (const row of record.vitals!.styleTics ?? []) {
+            const prior = tics.get(row.token);
+            if (!prior || row.count > prior.count) tics.set(row.token, row);
+        }
+    }
+    if (tics.size) {
+        out.push(
+            '### 文風趨同（全班都寫成同一個樣子）\n\n' +
+                [...tics.values()]
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 8)
+                    .map((row) => `- 「${row.token}」——${row.count} 人都在用（${row.characterIds.map(nameOf).join('、')}）`)
+                    .join('\n'),
+        );
+    }
+
     // 外力層: every card the deck played, with who chose it — the audit trail.
     const cards = records.flatMap((record) => (record.cardsPlayed ?? []).map((card) => ({ ...card, day: record.day, tick: record.tick })));
     if (cards.length) {
@@ -524,6 +546,12 @@ function buildTimeline(records: LabTickRecord[], world: WorldState | null): stri
                 block.push(
                     '迴圈（同一人反覆同一句）：' +
                         vitals.loops.map((row) => `${nameOf(row.characterId)}「${row.token}」${row.ticks} 拍`).join('；'),
+                );
+            }
+            if (vitals.styleTics?.length) {
+                block.push(
+                    '文風趨同（全班同一個寫法）：' +
+                        vitals.styleTics.map((row) => `「${row.token}」×${row.count}`).join('；'),
                 );
             }
         }

@@ -53,7 +53,7 @@ import { PARTS_OF_DAY } from './ports.ts';
 import type { AidActionInput, AidActionResult, AidPeer, AidSituation, AidVitality, ArchivePort, CanonicalSceneEvent, ClockPort, DirectorOfferedCard, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
-import { accountFace, bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, performanceDutyLine, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
+import { accountFace, bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, pickMealAt, performanceDutyLine, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
 import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple-prayer.ts';
 import { drainPendingDreams } from './core/dream.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
@@ -1707,9 +1707,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         const EAT_AT_STALL = 0.35; // at the stall and at all hungry ⇒ you eat
         for (const member of world.activeCast()) {
             const rosterScene = w.roster[member.id];
-            const meal = foodScenes.get(rosterScene);
-            if (!meal || member.state.hunger <= EAT_AT_STALL) continue;
-            if (spendableOf(member.id) < BigInt(meal.priceSubunits)) continue;
+            if (!foodScenes.has(rosterScene) || member.state.hunger <= EAT_AT_STALL) continue;
+            // 挑一樣吃 —— what this person orders, out of everything on offer here
+            // that they can pay for. Reading one fixed dish per stall is what made
+            // the whole cast eat 糖粥 every day of a season.
+            const meal = pickMealAt(world, rosterScene, member.id, spendableOf(member.id), today);
+            if (!meal) continue;
             try {
                 const outcome = economy.commitCommand(world, {
                     actorId: member.id,

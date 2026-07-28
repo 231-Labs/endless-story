@@ -389,6 +389,64 @@ test('a light pay packet escalates the livelihood stakes in the percept', () => 
     assert.match(percept, /各自另尋出路/);
 });
 
+/**
+ * 一日一餐管的是肚子，不是菜色 —— and the portion you paid for is a real thing.
+ *
+ * Both halves of this were introduced by widening the stall's menu from two
+ * dishes to ten. Per-item `oncePerDay` was harmless at two and became "eat ten
+ * times a day" at ten; and a menu of ten dishes is only worth having if the dish
+ * you bought exists afterwards — otherwise variety is just ten spellings of the
+ * same hunger decrement.
+ */
+test('一日一餐跨整份菜單，而買到的那一份是真的物件', async () => {
+    const world = buildSeasonWorld();
+    const economy = new LocalEconomy();
+    const liu = world.idByName('柳安春')!;
+    const stage = world.data.roster[liu];
+    const catalog = world.data.economy!.catalog;
+    // Widen this world's stall the way the season frames now do.
+    const base = catalog.find((row) => row.id === 'meal-front-street')!;
+    catalog.push({
+        ...base,
+        id: 'meal-front-street-sweet',
+        label: '前街一碗糖粥',
+        priceSubunits: '100',
+        spawnsObject: { label: '一碗糖粥', aliases: ['糖粥'], state: '一碗溫著的糖粥，米粒還粗' },
+    });
+
+    const first = economy.commitCommand(world, {
+        actorId: liu, sceneId: stage, witnessIds: [liu], day: 1,
+        command: { action: 'purchase', itemId: 'meal-front-street-sweet' },
+        causeEventId: 'test:menu1', seq: 0,
+    });
+    assert.equal(first.ok, true, first.reason);
+
+    // 買到的那一碗真的在他手上，而且是可以遞給別人的（贈物暖情吃得到它）。
+    const portion = (world.data.objects ?? []).find((object) => object.label === '一碗糖粥');
+    assert.ok(portion, '一份吃食是世界裡的東西，不是一個扣掉的數字');
+    assert.equal(portion!.carriedBy, liu);
+    assert.equal(portion!.portable, true);
+    assert.equal(portion!.sceneId, stage);
+
+    // 換一道菜，還是同一天的同一個肚子。
+    const secondDish = economy.commitCommand(world, {
+        actorId: liu, sceneId: stage, witnessIds: [liu], day: 1,
+        command: { action: 'purchase', itemId: 'meal-front-street' },
+        causeEventId: 'test:menu2', seq: 0,
+    });
+    assert.equal(secondDish.ok, false, '菜色換了，肚子沒換');
+    assert.match(secondDish.reason!, /今日已經吃過一頓/);
+
+    // 隔日照吃。
+    const tomorrow = economy.commitCommand(world, {
+        actorId: liu, sceneId: stage, witnessIds: [liu], day: 2,
+        command: { action: 'purchase', itemId: 'meal-front-street' },
+        causeEventId: 'test:menu3', seq: 0,
+    });
+    assert.equal(tomorrow.ok, true, tomorrow.reason);
+    assert.deepEqual(auditSeasonEconomy(world), [], '守恆沒破：買到的東西是物件，錢還是錢');
+});
+
 test('a purchase changes the world, respects prices, and is once-per-day', async () => {
     const world = buildSeasonWorld();
     const economy = new LocalEconomy();
@@ -413,7 +471,8 @@ test('a purchase changes the world, respects prices, and is once-per-day', async
         causeEventId: 'test:e2', seq: 0,
     });
     assert.equal(again.ok, false);
-    assert.match(again.reason!, /今日已經用過一次/);
+    assert.match(again.reason!, /今日已經吃過一頓/, '一日一餐，管的是肚子不是菜色');
+
 
     // repair: fixes the registered prop (real object-state change, versioned)
     const before = world.objectById('worn-huqin')!.version;

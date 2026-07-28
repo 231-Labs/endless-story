@@ -24,43 +24,8 @@ function boundedSignal(callerSignal?: AbortSignal): AbortSignal {
   return callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout;
 }
 
-export class LLMHttpError extends Error {
-  status: number;
-  provider: 'zai' | 'poe' | 'anthropic';
-  model: string;
-
-  constructor(
-    status: number,
-    provider: 'zai' | 'poe' | 'anthropic',
-    model: string,
-    bodySnippet: string,
-  ) {
-    super(`[${provider}] HTTP ${status} on ${model}: ${bodySnippet}`);
-    this.name = 'LLMHttpError';
-    this.status = status;
-    this.provider = provider;
-    this.model = model;
-  }
-}
-
-/** Is this an overload / transient / rate-limit error worth retrying with another model? */
-export function isRetryableError(err: unknown): boolean {
-  if (err instanceof LLMHttpError) {
-    // 500 included: Poe surfaces transient internal errors as plain 500s —
-    // two live seasons died to one-off "provider_error" 500s before this.
-    return err.status === 429 || err.status === 500 || err.status === 502 || err.status === 503 || err.status === 504 || err.status === 529;
-  }
-  const e = err as { status?: number; message?: string };
-  if (e?.status === 429 || e?.status === 500 || e?.status === 502 || e?.status === 503 || e?.status === 504 || e?.status === 529) return true;
-  const msg = (e?.message ?? '').toLowerCase();
-  if ((e as { name?: string })?.name === 'TimeoutError' || msg.includes('timed out') || msg.includes('timeout')) return true;
-  if (msg.includes('overloaded') || msg.includes('rate_limit') || msg.includes('rate limit')) return true;
-  // Network-level transients (a TCP reset once killed a whole season at day 3):
-  // undici surfaces them as `fetch failed` with the syscall error in `cause`.
-  const causeCode = String((e as { cause?: { code?: string } })?.cause?.code ?? '');
-  if (['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'].includes(causeCode)) return true;
-  return msg.includes('fetch failed') || msg.includes('socket hang up') || msg.includes('econnreset') || msg.includes('network');
-}
+export { LLMHttpError, isQuotaError, isRetryableError, classifyLLMFailure, type LLMFailureKind } from './failure.js';
+import { LLMHttpError } from './failure.js';
 
 /**
  * POST to Z.AI's OpenAI-compatible /chat/completions endpoint.

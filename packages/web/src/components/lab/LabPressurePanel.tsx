@@ -129,6 +129,13 @@ export function LabPressurePanel({
                                         title="同一個人反覆講同一句話"
                                     />
                                 ) : null}
+                                {vitals.styleTics?.length ? (
+                                    <Row
+                                        label="文風"
+                                        value={vitals.styleTics.map((t) => `「${t.token}」${t.count} 人`).join('；')}
+                                        title="全班都寫成同一個樣子——這是文筆的毛病，不是世界的毛病，兩者要分開看"
+                                    />
+                                ) : null}
                             </dl>
                         ) : null}
 

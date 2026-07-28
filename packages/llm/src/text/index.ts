@@ -13,7 +13,7 @@ export {
   type PoeModel,
   type PoeModelTier,
 } from './models.js';
-export { LLMHttpError, isRetryableError } from './providers.js';
+export { LLMHttpError, isRetryableError, isQuotaError, classifyLLMFailure, type LLMFailureKind } from './providers.js';
 export type {
   ChatMessage,
   ChatRequest,

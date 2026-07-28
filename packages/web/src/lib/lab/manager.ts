@@ -42,7 +42,7 @@ import {
 import { auditSeasonEconomy } from '@endless-story/engine/core/season-economy';
 import { writeTickDossiers } from '@endless-story/engine/dossier-artifact';
 import { refreshSeasonEditorial, type AnthologyComposer } from '@endless-story/engine/editorial-artifact';
-import { loadLLMConfig, resolveTextProvider } from '@endless-story/llm';
+import { loadLLMConfig, resolveTextProvider, text as llmText } from '@endless-story/llm';
 import { beatsFromTickRecords, tailTickRecords } from './artifacts';
 import { writeCheckpoint } from './checkpoints';
 import { readJson, runDir, writeJsonAtomic } from './paths';
@@ -533,7 +533,13 @@ export class LabRunManager {
                     });
                     run.transaction.commit();
                 } catch (error) {
+                    // The transaction restores state/ memory/ sessions/ archive/ ON DISK,
+                    // but `run.world` is the in-memory object runTick just mutated half-way
+                    // through. Without this reload the next tick would resume from the
+                    // half-applied world and snapshot it straight back over the rollback —
+                    // silently undoing the thing the rollback exists to do.
                     run.transaction.rollback();
+                    if (WorldState.exists(stateDir)) run.world = WorldState.restore(stateDir);
                     throw error;
                 }
                 // 天時（世界事件）與祈願（角色對神明說出口的話）進拍流：兩者都經
@@ -589,6 +595,19 @@ export class LabRunManager {
             run.phase = 'error';
             run.pendingTicks = 0;
             run.lastError = error instanceof Error ? error.message : String(error);
+            // 額度用盡 is not a crash and should not read like one: the world is
+            // intact, every committed tick is on disk, and the only thing standing
+            // between here and the next tick is money. Say exactly that, and say
+            // where the scroll actually stopped, so nobody goes looking for a bug.
+            if (llmText.isQuotaError(error)) {
+                const clock = run.world.data.clock;
+                this.log(
+                    run,
+                    `[停卷·額度用盡] 這一卷停在第 ${clock.day} 日第 ${clock.currentTick} 拍——` +
+                        '已走完的拍全部保住了（world.json／memory／archive 都在），失敗的那一拍已整個回滾。' +
+                        '同一個帳號所有模型共用額度，重試與備援模型都救不了；儲值後直接續走即可。',
+                );
+            }
             this.log(run, `[fatal] ${run.lastError}`);
         } finally {
             run.busy = false;

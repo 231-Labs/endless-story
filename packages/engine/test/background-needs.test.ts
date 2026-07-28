@@ -20,7 +20,7 @@ import { buildAnchunAcceptanceFrame } from './fixtures/anchun-acceptance-frame.t
 import { applySeasonFrame, buildWorldState, loadPresetFile, loadSeasonFrameFile } from '../src/preset.ts';
 import { cheapestMeal, settleBackgroundNeeds, HUNGER_ONSTAGE_CAP, HUNGER_STARVING } from '../src/core/background-needs.ts';
 import { HUNGER_SEEK } from '../src/core/stakes-brief.ts';
-import { auditSeasonEconomy, foodScenesOf } from '../src/core/season-economy.ts';
+import { auditSeasonEconomy, foodScenesOf, mealsByScene, pickMealAt } from '../src/core/season-economy.ts';
 import { WorldState } from '../src/world-state.ts';
 
 const YUAN = 100n;
@@ -175,4 +175,59 @@ test('the pass is deterministic: the hungriest keep the stake, ties broken by id
         ['蘇映雪', '柳安春'],
         'the two hungriest keep it',
     );
+});
+
+// ── 菜單 (the 糖粥 attractor's actual cause) ─────────────────────────────────
+
+test('攤子上有幾樣，engine 就看得見幾樣 —— 不是只看得見最便宜那樣', () => {
+    // The stall sold two dishes and the map that fed both the eat-in-passing and
+    // the offstage settle collapsed it to ONE (the cheapest). A live season then
+    // bought 糖粥 137 times, which read as a hunger attractor and was really the
+    // engine being unable to see the rest of the menu.
+    const world = streetWorld();
+    const stall = world.data.scenes.find((scene) => scene.name === '戲園前街')!.id;
+    const menu = mealsByScene(world).get(stall) ?? [];
+    assert.ok(menu.length >= 5, `攤子只看得見 ${menu.length} 樣`);
+    assert.ok(menu.some((item) => item.spawnsObject), '買到的那一份要是世上的東西');
+    // cheapest-first, so the floor price is menu[0]
+    for (let i = 1; i < menu.length; i++) {
+        assert.ok(BigInt(menu[i].priceSubunits) >= BigInt(menu[i - 1].priceSubunits));
+    }
+    assert.equal(foodScenesOf(world).get(stall)!.id, menu[0].id, '「這裡吃得起嗎」問的還是最便宜那樣');
+});
+
+test('挑一樣吃：同一攤同一天，一班人不會點同一碗', () => {
+    const world = streetWorld();
+    const stall = world.data.scenes.find((scene) => scene.name === '戲園前街')!.id;
+    const rich = 100n * 100n;
+    const chosen = new Set(
+        world.activeCast().map((member) => pickMealAt(world, stall, member.id, rich, 1)?.id),
+    );
+    assert.ok(chosen.size >= 4, `十三個人只點出 ${chosen.size} 樣`);
+
+    // 同一個人也不會天天吃同一樣
+    const liu = world.idByName('柳安春')!;
+    const acrossDays = new Set([1, 2, 3, 4, 5, 6].map((day) => pickMealAt(world, stall, liu, rich, day)?.id));
+    assert.ok(acrossDays.size >= 3, `一個人六天只吃了 ${acrossDays.size} 樣`);
+
+    // 確定性：同一個人同一天，永遠同一碗（seed 可重放）
+    assert.equal(pickMealAt(world, stall, liu, rich, 3)?.id, pickMealAt(world, stall, liu, rich, 3)?.id);
+
+    // 錢還是有分別的：只剩一圓的人搆不到貴的
+    const broke = pickMealAt(world, stall, liu, 100n, 1)!;
+    assert.equal(BigInt(broke.priceSubunits), 100n, '一圓就只買得起一圓的');
+});
+
+test('spawnsObject 活著走過季框轉換 —— 逐欄對映最會漏的就是新欄位', () => {
+    // It was dropped exactly once already: SeasonCatalogItem grew `spawnsObject`,
+    // the JSON carried it, and `applySeasonEconomy` mapped field by field without
+    // it — so a stall full of new dishes produced no food anybody could hold, and
+    // nothing errored. Same failure shape as the create-run route dropping deckId.
+    const world = streetWorld();
+    const withObject = world.data.economy!.catalog.filter((item) => item.spawnsObject);
+    assert.ok(withObject.length >= 5, '季框裡寫了 spawnsObject 的吃食都該還在');
+    for (const item of withObject) {
+        assert.ok(item.spawnsObject!.label.trim(), `${item.id} 的物件沒有名字`);
+        assert.ok(item.spawnsObject!.state.trim(), `${item.id} 的物件沒有狀態`);
+    }
 });

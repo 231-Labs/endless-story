@@ -281,7 +281,7 @@ test('4) 賒帳: a broke buyer at the allowsTab 食肆 still eats — bill, no t
         causeEventId: 'test:tab2', seq: 0,
     });
     assert.equal(again.ok, false);
-    assert.match(again.reason!, /今日已經用過一次/);
+    assert.match(again.reason!, /今日已經吃過一頓/, '一日一餐，管的是肚子不是菜色');
 
     // a vendor WITHOUT allowsTab (白家繡樓) keeps the exact old insufficient fail.
     const noTab = economy.commitCommand(world, {

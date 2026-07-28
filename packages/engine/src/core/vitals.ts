@@ -81,14 +81,25 @@ export interface TickVitals {
     convergence: ConvergenceFinding[];
     /** 4. characters stuck repeating themselves across the window. */
     loops: LoopFinding[];
+    /** 文風趨同 — phrases most of the cast has settled into (「聲氣」×13). A prose
+     *  problem, not a world problem, and invisible until it was split out of the
+     *  convergence list where it read as grammar noise. */
+    styleTics: ConvergenceFinding[];
     /** how many characters produced material this tick (the denominator). */
     actorCount: number;
 }
 
 // ── token extraction ────────────────────────────────────────────────────────
 
-/** Grammar-ish CJK bigrams that carry no narrative content. Kept small and
- *  explicit: a big stoplist would start hiding real signals. */
+/**
+ * Grammar-ish CJK bigrams that carry no narrative content.
+ *
+ * DELIBERATELY SMALL, and no longer the main defence — see `ambientTokens`
+ * below. A hand-curated stoplist cannot win this game: the first real run came
+ * back reporting 「了一」×11 as the cast's great convergence, and adding 「了一」
+ * would only have promoted 「收回」, then 「後日」, then 「聲氣」. Whack-a-mole on
+ * function words is not a filter, it is a chore that silently degrades.
+ */
 const STOP_TOKENS = new Set([
     '自己', '一個', '什麼', '這個', '那個', '不是', '就是', '可以', '沒有', '知道',
     '起來', '出來', '過來', '下來', '一句', '一聲', '一眼', '一下', '這樣', '那樣',
@@ -97,6 +108,37 @@ const STOP_TOKENS = new Set([
 ]);
 
 const CJK = /[一-鿿]/;
+
+/**
+ * 虛字 — characters that make an n-gram grammar rather than content.
+ *
+ * The sliding 2/3-gram tokenizer has no word segmentation, so most of what it
+ * produces is not words at all: sliding over 「…擱在妝臺上那疊散頁…」 yields
+ * 「擱在」「上那」「的事」 alongside the one real word 「散頁」. Document frequency
+ * cannot separate these — measured on a real 16-tick run, 「散頁」 (the season's
+ * central object) sat at 24% and the fragment 「上那」 at 26%. Same band, opposite
+ * meaning.
+ *
+ * So a token containing any of these is dropped outright. The set is deliberately
+ * narrow: particles, aspect markers, copulas, pronouns, deictics, degree words,
+ * coverbs, and the directional complements that only ever appear as complements.
+ * Characters that are ambiguous in THIS world stay OUT of it on purpose —
+ * 還 (還錢 vs 還是) because debt is a mechanic here, and 上／下／進／入 because
+ * 上臺／下場／進城 are content in an opera world.
+ *
+ * Honest about its status: this is a heuristic tuned against one real run. It is
+ * a DIAGNOSTIC filter — nothing in the engine branches on these numbers — so a
+ * false negative costs a missed warning, never a broken world.
+ */
+const FUNCTION_CHARS = new Set(
+    ('了的是在那這之其和與也都就又而但卻只才更最把被讓給從向對於跟個們什麼沒很再要會能可所以為已曾過著得地' +
+     '今昨時候回來去底半我你妳他她它們').split(''),
+);
+
+const hasFunctionChar = (token: string): boolean => {
+    for (const char of token) if (FUNCTION_CHARS.has(char)) return true;
+    return false;
+};
 
 /**
  * Content n-grams (2 and 3 characters) from one passage. CJK only: the world's
@@ -112,7 +154,7 @@ export function contentTokens(text: string): Set<string> {
             for (let size = 2; size <= 3; size++) {
                 for (let i = 0; i + size <= run.length; i++) {
                     const token = run.slice(i, i + size);
-                    if (!STOP_TOKENS.has(token)) tokens.add(token);
+                    if (!STOP_TOKENS.has(token) && !hasFunctionChar(token)) tokens.add(token);
                 }
             }
         }
@@ -124,6 +166,83 @@ export function contentTokens(text: string): Set<string> {
     }
     flush();
     return tokens;
+}
+
+/**
+ * 語料底噪 — tokens that show up all over the window, and therefore cannot be
+ * evidence that anything is happening RIGHT NOW.
+ *
+ * This is the self-maintaining replacement for a stoplist. 「了一」 appears in
+ * nearly every beat this world has ever produced, so its document frequency is
+ * near 1 and it is dropped without anybody having to think of it; 「糖粥」 appears
+ * in a handful, so it survives and gets reported. Nothing needs updating when the
+ * prose style changes — the baseline IS the prose.
+ *
+ * Measured against the WINDOW, never against the tick being judged: a genuine
+ * convergence must not be allowed to serve as its own baseline (if the whole cast
+ * says 糖粥 on this tick, 糖粥's frequency on this tick is exactly what we want to
+ * report, not what we want to normalise away).
+ */
+export const AMBIENT_DF = 0.35;
+/** Below this much corpus, document frequency is noise — a two-sample window
+ *  makes every token look either universal or unique. Under it, only the small
+ *  explicit stoplist applies, which is the behaviour this had before. */
+export const AMBIENT_MIN_SAMPLES = 12;
+
+export function ambientTokens(
+    window: ReadonlyArray<{ samples: ReadonlyArray<VitalsSample> }>,
+): Set<string> {
+    const documents = window.flatMap((frame) => [...frame.samples]);
+    const ambient = new Set<string>();
+    if (documents.length < AMBIENT_MIN_SAMPLES) return ambient;
+    const documentFrequency = new Map<string, number>();
+    for (const sample of documents) {
+        for (const token of contentTokens(sample.text)) {
+            documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
+        }
+    }
+    const threshold = documents.length * AMBIENT_DF;
+    for (const [token, count] of documentFrequency) {
+        if (count >= threshold) ambient.add(token);
+    }
+    return ambient;
+}
+
+/**
+ * 文風趨同 — the phrases the whole cast has settled into using.
+ *
+ * The ambient set is not just noise to discard: an ambient token that MOST OF THE
+ * CAST shares is a real and otherwise-invisible finding. The first live run had
+ * 「聲氣」 132 times across thirteen characters — twelve people who had each
+ * quietly adopted the same narrator's tic — and it was buried under 「了一」 in
+ * the convergence list, where it read as more grammar noise.
+ *
+ * Reported separately because it is a different failure from the 糖粥 attractor:
+ * convergence is everyone WANTING the same thing, this is everyone WRITING the
+ * same way. One is a world problem, the other is a prose problem.
+ */
+export function styleTicsOf(
+    window: ReadonlyArray<{ samples: ReadonlyArray<VitalsSample> }>,
+    ambient: ReadonlySet<string>,
+): ConvergenceFinding[] {
+    const byToken = new Map<string, Set<string>>();
+    for (const frame of window) {
+        for (const sample of frame.samples) {
+            for (const token of contentTokens(sample.text)) {
+                if (!ambient.has(token)) continue;
+                (byToken.get(token) ?? byToken.set(token, new Set()).get(token)!).add(sample.characterId);
+            }
+        }
+    }
+    const castSize = new Set(window.flatMap((f) => f.samples.map((s) => s.characterId))).size;
+    const floor = Math.max(CONVERGENCE_MIN_CHARACTERS, Math.ceil(castSize * 0.6));
+    const findings: ConvergenceFinding[] = [];
+    for (const [token, characters] of byToken) {
+        if (characters.size < floor) continue;
+        findings.push({ token, characterIds: [...characters].sort(), count: characters.size });
+    }
+    findings.sort((a, b) => b.count - a.count || b.token.length - a.token.length || a.token.localeCompare(b.token));
+    return dropSubsumed(findings).slice(0, REPORT_CAP);
 }
 
 // ── the detectors ───────────────────────────────────────────────────────────
@@ -161,10 +280,16 @@ export function sceneEntropyOf(samples: ReadonlyArray<VitalsSample>): { entropy:
  * attractor takes hold, one token shows up in most of the cast's intentions at
  * once.
  */
-export function convergenceOf(samples: ReadonlyArray<VitalsSample>): ConvergenceFinding[] {
+export function convergenceOf(
+    samples: ReadonlyArray<VitalsSample>,
+    /** Corpus-level background chatter to ignore (see `ambientTokens`). Absent ⇒
+     *  the small stoplist only, which is what this did before the filter existed. */
+    ambient: ReadonlySet<string> = new Set(),
+): ConvergenceFinding[] {
     const byToken = new Map<string, Set<string>>();
     for (const sample of samples) {
         for (const token of contentTokens(sample.text)) {
+            if (ambient.has(token)) continue;
             (byToken.get(token) ?? byToken.set(token, new Set()).get(token)!).add(sample.characterId);
         }
     }
@@ -201,12 +326,17 @@ function dropSubsumed(findings: ConvergenceFinding[]): ConvergenceFinding[] {
  */
 export function loopsOf(
     window: ReadonlyArray<{ tick: number; samples: ReadonlyArray<VitalsSample> }>,
+    /** Same corpus filter the convergence detector uses: a character "repeating"
+     *  a phrase everybody uses every tick is not in a rut, they are speaking
+     *  Chinese. 柳安春「了一」連 7 拍 was this exact false positive. */
+    ambient: ReadonlySet<string> = new Set(),
 ): LoopFinding[] {
     const byChar = new Map<string, Map<string, Set<number>>>();
     for (const frame of window) {
         for (const sample of frame.samples) {
             const perChar = byChar.get(sample.characterId) ?? byChar.set(sample.characterId, new Map()).get(sample.characterId)!;
             for (const token of contentTokens(sample.text)) {
+                if (ambient.has(token)) continue;
                 (perChar.get(token) ?? perChar.set(token, new Set()).get(token)!).add(frame.tick);
             }
         }
@@ -253,6 +383,10 @@ export function computeTickVitals(
 ): TickVitals {
     const heartbeat = resolvedRate(world.data.wants);
     const { entropy, crowdPeak } = sceneEntropyOf(req.samples);
+    // The baseline is the WINDOW — this tick's own material must not normalise
+    // away the very convergence we are trying to catch.
+    const window = world.data.vitalsWindow ?? [];
+    const ambient = ambientTokens(window);
     return {
         day: req.day,
         tick: req.tick,
@@ -263,8 +397,9 @@ export function computeTickVitals(
         resolvedThisTick: req.resolvedThisTick,
         sceneEntropy: entropy,
         sceneCrowdPeak: crowdPeak,
-        convergence: convergenceOf(req.samples),
-        loops: loopsOf(world.data.vitalsWindow ?? []),
+        convergence: convergenceOf(req.samples, ambient),
+        loops: loopsOf(window, ambient),
+        styleTics: styleTicsOf(window, ambient),
         actorCount: new Set(req.samples.map((sample) => sample.characterId)).size,
     };
 }
@@ -281,6 +416,9 @@ export function describeVitals(world: WorldState, vitals: TickVitals): string {
     }
     if (vitals.loops.length) {
         parts.push(`迴圈：${vitals.loops.map((row) => `${world.nameById(row.characterId)}「${row.token}」${row.ticks}拍`).join('、')}`);
+    }
+    if (vitals.styleTics.length) {
+        parts.push(`文風趨同：${vitals.styleTics.map((row) => `「${row.token}」×${row.count}`).join('、')}`);
     }
     return parts.join(' · ');
 }

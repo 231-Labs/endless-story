@@ -331,6 +331,10 @@ export interface LabTickRecord {
         sceneCrowdPeak: number;
         convergence: Array<{ token: string; characterIds: string[]; count: number }>;
         loops: Array<{ characterId: string; token: string; ticks: number }>;
+        /** 文風趨同 — phrases most of the cast has settled into. A PROSE problem,
+         *  split out from `convergence` (a world problem) because they need
+         *  completely different fixes and one was hiding the other. */
+        styleTics?: Array<{ token: string; characterIds: string[]; count: number }>;
         actorCount: number;
     };
     /** 事件卡 played this tick, and who chose them. */

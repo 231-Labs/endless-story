@@ -24,7 +24,7 @@
  *     gone is its own drama; a belly that is merely empty is an errand.
  */
 
-import { accountFace, foodScenesOf, formatMoney, moveBetweenAccounts } from './season-economy.ts';
+import { accountFace, foodScenesOf, formatMoney, mealsByScene, moveBetweenAccounts, pickMealAt } from './season-economy.ts';
 import { HUNGER_SEEK } from './stakes-brief.ts';
 import type { SeasonCatalogItem } from './season-economy.ts';
 import type { WorldState } from '../world-state.ts';
@@ -81,10 +81,14 @@ export const HUNGER_ONSTAGE_CAP = 2;
  *  順路而食 read. A world whose meals are all unanchored (no `sceneName`) has no
  *  food venue at all, so this pass stays completely inert there, exactly like the
  *  rest of the hunger machinery. */
+/** The cheapest meal anywhere — the affordability floor the offstage settle
+ *  budgets against (who can eat at all), NOT what any one person eats. */
 export function cheapestMeal(world: WorldState): SeasonCatalogItem | undefined {
     let best: SeasonCatalogItem | undefined;
-    for (const item of foodScenesOf(world).values()) {
-        if (!best || BigInt(item.priceSubunits) < BigInt(best.priceSubunits)) best = item;
+    for (const items of mealsByScene(world).values()) {
+        for (const item of items) {
+            if (!best || BigInt(item.priceSubunits) < BigInt(best.priceSubunits)) best = item;
+        }
     }
     return best;
 }
@@ -121,6 +125,9 @@ export function settleBackgroundNeeds(
     const fed = (world.data.backgroundFedDay ??= {});
     const price = BigInt(meal.priceSubunits);
     const vendorId = meal.vendorAccountId ?? data.marketAccountId;
+    // The stall the floor price came from — offstage eaters are nowhere in
+    // particular, so they are settled against the cheapest venue in the world.
+    const mealScene = [...mealsByScene(world)].find(([, items]) => items.some((item) => item.id === meal.id))?.[0] ?? '';
 
     // ── who is even in scope, and who is exempt ──
     const candidates: Array<{ id: string; hunger: number }> = [];
@@ -158,12 +165,16 @@ export function settleBackgroundNeeds(
             continue;
         }
         const member = world.castById(id)!;
+        // Different dish per person — offstage eating should not read as thirteen
+        // people queuing for the identical bowl either. Budget is the floor price,
+        // because this is the settle for people who are NOT making a choice.
+        const dish = pickMealAt(world, mealScene, id, price, req.day) ?? meal;
         const moved = moveBetweenAccounts(world, {
             txnId: `bgmeal:d${req.day}:${id}`,
             fromAccountId: id,
-            toAccountId: vendorId,
-            amountSubunits: price,
-            memo: `${meal.label}·順手墊了一口`,
+            toAccountId: dish.vendorAccountId ?? vendorId,
+            amountSubunits: BigInt(dish.priceSubunits),
+            memo: `${dish.label}·順手墊了一口`,
             causeEventId: `${world.data.sagaId}:background-need:d${req.day}:${id}`,
         });
         if (!moved.ok || moved.paidSubunits <= 0n) {
@@ -174,7 +185,7 @@ export function settleBackgroundNeeds(
         fed[id] = req.day;
         member.state.hunger = Math.max(0, member.state.hunger - BACKGROUND_MEAL_RELIEF);
         report.settledIds.push(id);
-        report.lines.push(`${member.name}隨手墊了一口${meal.label}（${formatMoney(data, moved.paidSubunits)}），沒當一回事。`);
+        report.lines.push(`${member.name}隨手墊了一口${dish.label}（${formatMoney(data, moved.paidSubunits)}），沒當一回事。`);
     }
     report.spentSubunits = spent.toString();
     return report;

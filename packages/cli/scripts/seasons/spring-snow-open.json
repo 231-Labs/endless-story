@@ -295,30 +295,6 @@
     ],
     "catalog": [
       {
-        "id": "meal-frontstreet-noodle",
-        "label": "前街食肆一碗熱湯麵",
-        "priceYuan": 3,
-        "kind": "meal",
-        "sceneName": "戲園前街",
-        "effect": {
-          "kind": "relieve-hunger"
-        },
-        "oncePerDay": true,
-        "vendorAccountId": "前街食肆"
-      },
-      {
-        "id": "meal-frontstreet-shengjian",
-        "label": "趙阿福一客生煎",
-        "priceYuan": 2,
-        "kind": "meal",
-        "sceneName": "戲園前街",
-        "effect": {
-          "kind": "relieve-hunger"
-        },
-        "oncePerDay": true,
-        "vendorAccountId": "前街食肆"
-      },
-      {
         "id": "meal-frontstreet-tangzhou",
         "label": "前街食肆一碗糖粥",
         "priceYuan": 1,
@@ -328,7 +304,195 @@
           "kind": "relieve-hunger"
         },
         "oncePerDay": true,
-        "vendorAccountId": "前街食肆"
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一碗糖粥",
+          "aliases": [
+            "糖粥",
+            "粥"
+          ],
+          "state": "一碗溫著的糖粥，米粒還粗"
+        }
+      },
+      {
+        "id": "meal-frontstreet-doujiang",
+        "label": "前街食肆一碗鹹豆漿",
+        "priceYuan": 1,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一碗鹹豆漿",
+          "aliases": [
+            "豆漿",
+            "鹹豆漿"
+          ],
+          "state": "一碗鹹豆漿，油條碎、蝦皮、紫菜浮在面上，還燙"
+        }
+      },
+      {
+        "id": "meal-frontstreet-cifan",
+        "label": "前街食肆一副粢飯糰",
+        "priceYuan": 1,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一副粢飯糰",
+          "aliases": [
+            "粢飯",
+            "飯糰"
+          ],
+          "state": "一副粢飯糰，裹著油條，捏得緊實，紙包著還溫"
+        }
+      },
+      {
+        "id": "meal-frontstreet-jiuniang",
+        "label": "前街食肆一碗酒釀圓子",
+        "priceYuan": 1,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一碗酒釀圓子",
+          "aliases": [
+            "酒釀",
+            "圓子"
+          ],
+          "state": "一碗酒釀圓子，甜氣裡帶一點酒氣"
+        }
+      },
+      {
+        "id": "meal-frontstreet-congyoubing",
+        "label": "前街食肆一張蔥油餅",
+        "priceYuan": 1,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一張蔥油餅",
+          "aliases": [
+            "蔥油餅",
+            "油餅"
+          ],
+          "state": "一張蔥油餅，起了酥，蔥花的焦香散不掉"
+        }
+      },
+      {
+        "id": "meal-frontstreet-shengjian",
+        "label": "前街食肆一副生煎",
+        "priceYuan": 2,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一副生煎",
+          "aliases": [
+            "生煎",
+            "生煎饅頭"
+          ],
+          "state": "一副生煎，底焦皮脆，油紙包著還燙手"
+        }
+      },
+      {
+        "id": "meal-frontstreet-xiaolong",
+        "label": "前街食肆一籠小籠",
+        "priceYuan": 2,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一籠小籠",
+          "aliases": [
+            "小籠",
+            "小籠包"
+          ],
+          "state": "一籠小籠，皮薄得透出湯色，籠屜還冒白氣"
+        }
+      },
+      {
+        "id": "meal-frontstreet-guihuagao",
+        "label": "前街食肆一塊桂花糕",
+        "priceYuan": 2,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一塊桂花糕",
+          "aliases": [
+            "桂花糕",
+            "糕"
+          ],
+          "state": "一塊桂花糕，切得方正，桂花的甜氣是冷的"
+        }
+      },
+      {
+        "id": "meal-frontstreet-noodle",
+        "label": "前街食肆一碗熱湯麵",
+        "priceYuan": 3,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一碗熱湯麵",
+          "aliases": [
+            "湯麵",
+            "麵"
+          ],
+          "state": "一碗熱湯麵，湯麵上浮著一層蔥花，碗沿燙手"
+        }
+      },
+      {
+        "id": "meal-frontstreet-xiefen",
+        "label": "前街食肆一客蟹粉小食",
+        "priceYuan": 4,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆",
+        "spawnsObject": {
+          "label": "一客蟹粉小食",
+          "aliases": [
+            "蟹粉",
+            "小食"
+          ],
+          "state": "一客蟹粉小食，黃澄澄的一小碟，聞著就知道價錢"
+        }
       },
       {
         "id": "flower-frontstreet-bailan",
