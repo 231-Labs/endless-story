@@ -30,20 +30,8 @@ chapters-out/
 # local engine runs (use ES_LAB_ROOT + lab:publish instead)
 engine-run/
 
-# Internal dev-only docs & experiments (kept on disk, never delivered).
-# Re-include the revocation-gap pilot source + RESULTS (git cannot re-include
-# under an ignored parent unless every ancestor is un-ignored stepwise).
-/internal/*
-!/internal/research/
-/internal/research/*
-!/internal/research/revocation-gap/
-/internal/research/revocation-gap/**
-!/internal/research/revocation-gap/**/*.ts
-!/internal/research/revocation-gap/**/*.json
-!/internal/research/revocation-gap/**/*.md
-!/internal/research/revocation-gap/.gitignore
-/internal/research/revocation-gap/runs/
-/internal/research/revocation-gap/.cache/
+# Internal dev-only docs & experiments (kept on disk, never delivered)
+/internal/
 
 # docs-site: generated copies (rebuilt by site/sync.sh and by CI at deploy)
 /site/content/*.md
