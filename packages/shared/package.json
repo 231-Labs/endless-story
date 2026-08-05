@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./types": "./src/types/index.ts",
+    "./world-clock": "./src/lib/world-clock.ts",
     "./contract-ids": "./src/contract-ids.ts",
     "./role-rules": "./src/role-rules.ts",
     "./to-traditional": "./src/to-traditional.ts"

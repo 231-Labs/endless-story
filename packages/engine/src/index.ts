@@ -50,4 +50,4 @@ export * from './season-opening.ts';
 export * from './tick-transaction.ts';
 
 // Local-first adapters (node-clean).
-export { FakeSceneAgent, LocalRecall, FileArchive, LocalClock, LocalEconomy, makeClock } from './adapters/local/index.ts';
+export { FakeSceneAgent, LocalRecall, FileArchive, LocalClock, LocalEconomy, makeClock, MirrorClock, sampleMirrorClock } from './adapters/local/index.ts';

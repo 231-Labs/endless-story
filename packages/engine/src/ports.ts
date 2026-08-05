@@ -21,6 +21,7 @@ import type { SceneAgent } from './core/scene-loop.ts';
 import type { RegenerateWantInput, RewriteLedgerInput, RewriteReply, RewriteSpawn } from './core/want-rewrite.ts';
 import type { WantSemanticTag, WantSource, WantSubjectRef } from './core/want-core.ts';
 import type * as Runner from '@endless-story/runner';
+import { PARTS_OF_DAY, type PartOfDay } from '@endless-story/shared/world-clock';
 
 // ── Re-used runner authorship shapes (type-only) ─────────────────────────────
 export type DeriveWantsInput = Runner.characterAgent.DeriveWantsInput;
@@ -698,9 +699,10 @@ export interface ArchivePort {
 }
 
 // ── Clock ────────────────────────────────────────────────────────────────────
-/** The 6-part day palette (§ world-time). Night = the last two. */
-export const PARTS_OF_DAY = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
-export type PartOfDay = (typeof PARTS_OF_DAY)[number];
+/** The 6-part day palette (§ world-time). Night = the last two. Canonical home
+ *  is shared/lib/world-clock (single source across engine/runner/web);
+ *  re-exported here so the engine's public API is unchanged. */
+export { PARTS_OF_DAY, type PartOfDay };
 
 export interface WorldClock {
     /** Monotonic tick counter (the single source of truth). */

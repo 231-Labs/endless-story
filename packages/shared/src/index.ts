@@ -1,5 +1,6 @@
 export * from './types/index';
 export * from './lib/walrus';
+export * from './lib/world-clock';
 export * from './lib/walrus-blob-id';
 export * from './contract-ids';
 export * from './role-traits';
