@@ -35,6 +35,8 @@ import type {
     DeclareWantSemanticsReply,
     DirectorPickInput,
     DirectorPickReply,
+    InterludeInput,
+    InterludeReply,
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
     PlanDayInput,
@@ -1022,6 +1024,75 @@ export class RunnerSceneAgent implements SceneAgentPort {
             livelihoodFraming: input.livelihoodFraming,
         });
         return { planText: result.planText };
+    }
+
+    /**
+     * 折子座席 —— 幕間的一輪。此人**不在場上**：他正按自己的行當節律過日子，外頭一句
+     * 話遞到跟前，他聽見了，回一句，或許記下一筆心事。動詞集受限——不開場面、不拉旁
+     * 人進戲、不替別人拿主意；那些是大拍的事。
+     *
+     * 走既有的 per-character session（`respond`，與 actBeat／povScene 同一把 identity）：
+     * 這一輪是**真的活過的**，捎話與答話都留在他自己的 transcript 裡，所以下一個大拍
+     * 只需「聽說」而不必重講。沒有 session 的接線（缺 sagaId／未配 sessionDir）退回單輪
+     * 無狀態呼叫，機制不變。嚴格 JSON；任何失手回 null——引擎自會把這樁捎話原封留給
+     * 下一個大拍。
+     */
+    async interlude(input: InterludeInput): Promise<InterludeReply | null> {
+        const said = input.stimuli
+            .filter((stimulus) => stimulus.text.trim())
+            .map((stimulus) => `- ${stimulus.kind === 'note' ? '東家捎話' : '外頭有人捎話'}：「${stimulus.text.trim()}」`)
+            .join('\n');
+        if (!said) return null;
+        // 鏡像卷有日期就報日期（民國十五年八月五日 晡時），排演卷只有第幾日。
+        const when = input.dateLabel
+            ? `${input.dateLabel} ${input.clock.partOfDay}`
+            : `第${input.clock.day}日・${input.clock.partOfDay}`;
+        const percept = [
+            '【幕間·你此刻不在場上】',
+            `${when}。${input.activityHint ? `你此刻本該在：${input.activityHint}。` : ''}`,
+            '有話遞到你跟前：',
+            said,
+            '',
+            '你聽見了。回一句你此刻真會說、真會做的——民國年間戲班子裡的人怎麼說話，你就怎麼說；',
+            '不許現代腔、不許洋詞、不許旁白解釋。就這一句（≤40字，可帶一個小動作）：',
+            '不開場面、不拉旁人進戲、不替不在跟前的人拿主意。',
+            '若這句話在你心裡留下了什麼，另記一筆心事（≤30字，第一人稱）；沒有就省略。',
+            '嚴格只輸出 JSON：{"response":"…","memoryNote":"…可省略…"}，不要 markdown、不要多餘文字。',
+        ].join('\n');
+
+        const identity = this.identity({
+            sagaId: input.sagaId,
+            characterId: input.characterId,
+            name: input.name,
+            persona: input.persona ?? '',
+        });
+        try {
+            let raw: string;
+            if (identity && this.sessions) {
+                raw = await this.sessions.respond(identity, percept, {
+                    eventId: `interlude:${input.stimuli[0]?.id ?? input.characterId}`,
+                    maxTokens: 260,
+                    temperature: 0.9,
+                });
+            } else {
+                const client = llmText.createTextClient({ kind: 'primary' });
+                const res = await client.chat({
+                    model: client.defaultModel,
+                    system: `你就是${input.name}。${input.persona ?? ''}\n你活在民國年間的一座戲園子裡。只答此刻被問到的這一樁。`,
+                    messages: [{ role: 'user', content: percept }],
+                    maxTokens: 260,
+                    temperature: 0.9,
+                });
+                raw = res.text;
+            }
+            const obj = extractRewriteJson(raw) as { response?: unknown; memoryNote?: unknown } | null;
+            const response = typeof obj?.response === 'string' ? toTraditional(obj.response.trim()).slice(0, 60) : '';
+            if (!response) return null;
+            const note = typeof obj?.memoryNote === 'string' ? obj.memoryNote.trim() : '';
+            return { response, ...(note ? { memoryNote: toTraditional(note).slice(0, 30) } : {}) };
+        } catch {
+            return null; // 幕間沒答上不是事故：這樁捎話留給大拍
+        }
     }
 
     async consolidateSelfModel(input: SelfModelConsolidateInput): Promise<SelfModelConsolidateReply> {

@@ -431,6 +431,43 @@ export interface PlanDayReply {
     planText: string;
 }
 
+// ── 折子 (interlude): 拍與拍之間，外來刺激喚起的單角色有界演繹 ────────────────
+/** 一則外來刺激 —— 東家留言、實驗者戳世界、（P1b）鏈上事件映射而來。純資料，
+ *  排在 `WorldData.pendingStimuli` 佇列裡等著被合併成一次折子。 */
+export interface InterludeStimulus {
+    id: string;
+    characterId: string;
+    /** P1：'poke'（實驗者戳）| 'note'（留言）；P1b 鏈側三源再擴。 */
+    kind: 'poke' | 'note';
+    text: string;
+    atRealMs: number;
+}
+
+/** 折子座席收到的全部所見：此人、此刻、debounce 窗內合併的全部捎話。
+ *  受限動詞集——聽見／回話／記下心事，不開場景、不 weave、不判官。 */
+export interface InterludeInput {
+    characterId: string;
+    name: string;
+    /** debounce 窗內合併後的全部刺激。 */
+    stimuli: InterludeStimulus[];
+    clock: WorldClock;
+    /** mirror 世界的日期標籤（民國十五年八月五日）；tick 世界缺省。 */
+    dateLabel?: string;
+    /** 行當節律「此刻本該在哪」一行（有則附）。 */
+    activityHint?: string;
+    /** 座席側解析持久 session 身分用（key = sagaId + characterId，canon 取 persona）。
+     *  引擎有就給；缺席時真座席退回無 session 的單輪，機制不變。 */
+    sagaId?: string;
+    persona?: string;
+}
+
+export interface InterludeReply {
+    /** 聽見後的一句回應（可含動作記述）。 */
+    response: string;
+    /** 選配：記一筆心事（入長期記憶）。 */
+    memoryNote?: string;
+}
+
 /** NIGHTLY 心事自改 input — the unspoken matter and what LANDED on it today. */
 export interface EvolveSecretInput {
     name: string;
@@ -593,6 +630,12 @@ export interface SceneAgentPort extends SceneAgent {
      *  implement it (one cheap LLM call); deterministic/fake adapters omit it, and
      *  the tick simply skips planning. null → keep the prior plan. */
     planDay?(input: PlanDayInput): Promise<PlanDayReply | null>;
+    /** 折子座席 (optional): 拍與拍之間，外來捎話送到某個不在場上的人跟前——他聽見了，
+     *  回一句，或許記一筆心事。一次有界演繹，動詞集受限（不開場景、不拉別人進戲）。
+     *  Real adapters implement it (per-character session 一輪); 缺席的座席（fake 以外
+     *  的舊 adapter）不實作，佇列裡的捎話便原封留給下一個大拍聽見——喚醒層是純增量，
+     *  關掉即回到六拍世界。null → 這一輪沒答上，同樣留給大拍。 */
+    interlude?(input: InterludeInput): Promise<InterludeReply | null>;
     /** Optional: PROSE of an audience member's reaction (never the box-office number). */
     audienceReaction?(input: AudienceReactionInput): Promise<string | null>;
     /** SELF-CHECK / REPAIR: re-read a rendered scene and return the same beats with

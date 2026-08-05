@@ -44,6 +44,8 @@ export * from './core/background-needs.ts';
 export * from './ports.ts';
 export * from './world-state.ts';
 export * from './tick.ts';
+// 折子（喚醒層 P1）：拍與拍之間的有界演繹。零鏈、now 由呼叫端傳入。
+export * from './interlude.ts';
 export * from './preset.ts';
 export * from './session/character-session.ts';
 export * from './season-opening.ts';

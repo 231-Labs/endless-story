@@ -27,6 +27,8 @@ import type {
     DirectorPickReply,
     GenesisWant,
     EvolveSecretInput,
+    InterludeInput,
+    InterludeReply,
     PovReflectInput,
     PovSceneInput,
     JudgeEstablishedInput,
@@ -433,6 +435,23 @@ export class FakeSceneAgent implements SceneAgentPort {
                 input.otherName ? `${input.otherName}啊${input.otherName}` : '燈下自照',
                 `第${input.day}日，${input.clock}，墨未乾`,
             ].join('\n'),
+        };
+    }
+
+    /**
+     * 折子（確定性替身）— 零鑰零費的一次幕間演繹：聽見最後一則捎話，答一句、記一筆。
+     * 它證的是喚醒層的接線（debounce → 預算 → 演繹 → 記憶 → 拍首 percept 全程走通），
+     * 不是戲；真座席換 RunnerSceneAgent。捎話全空 ⇒ null（引擎照樣把它留給大拍）。
+     */
+    async interlude(input: InterludeInput): Promise<InterludeReply | null> {
+        const last = [...input.stimuli].reverse().find((stimulus) => stimulus.text.trim());
+        if (!last) return null;
+        const gist = last.text.trim().slice(0, 12);
+        // 此刻本該在哪（行當節律推的存在形狀）有給就站在那兒聽——替身也該在自己的位置上。
+        const heard = input.activityHint ? `${input.activityHint}，聽見了` : `${input.name}聽見了`;
+        return {
+            response: `${heard}：「${gist}」…點頭記下。`,
+            memoryNote: `${input.clock.partOfDay}幕間，有人捎話：「${gist}」，我記下了。`,
         };
     }
 
