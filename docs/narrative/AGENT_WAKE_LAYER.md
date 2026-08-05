@@ -52,16 +52,32 @@ wake = (stimuli[], wakeSet ⊆ cast, 落款時刻 = 真實 now) → 一次有界
 4. **起念 timer**（P2）——want 可宣告「某真實時刻我要做某事」，到點喚醒本人。
    排程資料掛在 want 上（want-lifecycle 已有 dueDay 語義，這是它的細粒度延伸）。
 
-## 五、併發模型：單一寫者鏈
+## 五之零、機制歸屬（鐵律，鏈解耦）
 
-`/api/tick` 的 process-wide promise chain（`tickChain`）**擴名為 enactChain**：
-大拍與折子全部鏈上排隊，**任何時刻至多一個演繹在寫世界**。
+折子是敘事機制，**機制本體進 `packages/engine`**（core + ports），不安家在
+web wiring——與 want、scene loop、fatigue 同一條鐵律（`ENGINE_CORE.md`）：
 
-- 折子撞上進行中的大拍（可長達 6–8 分鐘）→ 排在其後。承諾是「幾分鐘」，
-  不是「幾秒」；不需要場景鎖、不需要衝突仲裁——併發被構造性地消滅。
-- 驅動器不新增：world-loop 的 4 小時邊界睡眠改為「睡到邊界，**每 N 分鐘醒來
-  巡一次佇列**」；有刺激就發 `/api/wake`（與 `/api/tick` 同構的受權路由）。
-  一個序列驅動器，零新併發面。
+- engine 新增 **stimulus 佇列與折子演繹**：`StimulusPort`（enqueue/drain）＋
+  tick pipeline 的折子入口（一次有界演繹，受限動詞集，走既有
+  `SceneAgentPort` 座席）。純機制、零鏈、`now` 可注入。
+- **lab 是第一個消費者**（解耦線先行）：UI「戳世界」按鈕／腳本注入 stimulus，
+  折子的 `realMs` **記進 `ticks.jsonl`**——重播讀錄下的時刻，確定性不破
+  （錄時重播，同 run-manifest 溯源紀律）。
+- **鏈側是第二個 wiring**：web `/api/wake` 只是受權入口＋admin 簽名，
+  機制不在這裡。
+
+## 五、併發模型：單一寫者
+
+抽象原則：**一個世界任何時刻至多一個演繹在寫**（大拍與折子同隊）。
+
+- lab wiring：run 目錄本就單寫者（`TickFilesystemTransaction`），折子排進
+  同一條 run 序列即可。
+- 鏈側 wiring：`/api/tick` 既有的 process-wide promise chain（`tickChain`）
+  **擴名為 enactChain**，`/api/wake` 與大拍同鏈排隊。折子撞上進行中的大拍
+  （可長達 6–8 分鐘）→ 排在其後；承諾是「幾分鐘」不是「幾秒」。
+  不需要場景鎖、不需要衝突仲裁——併發被構造性地消滅。
+- 鏈側驅動器不新增：world-loop 的 4 小時邊界睡眠改為「睡到邊界，
+  **每 N 分鐘醒來巡一次佇列**」。一個序列驅動器，零新併發面。
 
 ## 六、合併與預算（成本閘門）
 
@@ -139,9 +155,11 @@ activity: { actor, type, location, start_at, expected_end_at,
 
 ## 八、分期
 
-- **P1 反應式**：enactChain、`/api/wake`、world-loop 巡佇列、留言/注夢/鏈事件
-  三源、debounce + 預算、台柱/班底 tier、percept 匯入。體感目標：戳世界，
-  幾分鐘內有回音。
+- **P1 反應式（engine 先行）**：`StimulusPort` + 折子演繹進 engine core、
+  debounce + 預算、台柱/班底 tier、percept 匯入；**lab 首發**（戳世界按鈕、
+  錄時重播）。體感目標：戳世界，幾分鐘內有回音。
+- **P1b 鏈側接線**：`/api/wake`、enactChain、world-loop 巡佇列、
+  留言/注夢/鏈事件三源映射為 stimulus。
 - **P1.5 前台活性（零 LLM）**：presence 狀態（排戲中/睡眠中，由節律與
   activity 推）、夜間擋信（「柳安春已經睡了，可留信，明早醒來會看到」）、
   今日時間線表面。成本近零、體感極強，可與 P1 並行。
@@ -172,8 +190,9 @@ Activity、catch-up、前台活性——已擇優併入上文）。以下為**�
 
 - **成本數字未定**：預算 N、debounce 窗、巡佇列間隔都要跑數據再定；
   設計只保證閘門存在且退化優雅。
-- **lab 不接喚醒層**：lab 是確定性實驗台（tick 模式），折子依賴牆鐘。
-  lab 若要試折子，以手動「wake 按鈕」注入固定時刻模擬。
+- **lab 確定性 × 牆鐘**：以**錄時重播**解——現場跑時折子記下 `realMs`
+  （入 `ticks.jsonl`），重播讀錄下的時刻不再取樣牆鐘；鏡像時間的 lab 卷
+  （選配）同理。確定性與擬真不必二選一。
 - **鏈上不記折子**（暫）：與改曆同哲學——ms 時戳已足以回溯定位；
   若日後折子要上鏈存證，事件形狀留待合約下一 rev。
 - **一對一交會的對方也在折子預算內**：被動被拉進交會計一次折子，
