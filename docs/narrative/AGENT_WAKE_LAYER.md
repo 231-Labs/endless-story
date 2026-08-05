@@ -167,6 +167,92 @@ activity: { actor, type, location, start_at, expected_end_at,
   `next_check_at`。體感目標：角色在你沒看的時候也在過日子。
 - **P3 波及與世情動詞**：depth-1 stimulus 傳遞、叩門/放行等動詞進折子。
 
+## 附錄 A、P1-lab 實作規格（定稿）
+
+目標體感：**cinema-lab 一個開關，卷子與現實同刻活著**——鐘面走真時刻、
+時辰邊界自動打大拍、戳世界幾十秒內折子回應、離開再回來看到「歇了 N 拍」。
+
+### A1 引擎（機制本體，零鏈、now 可注入）
+
+`ports.ts` 新增（緊鄰 PlanDay 選配 port 的先例）：
+
+```ts
+export interface InterludeStimulus {
+    id: string;
+    characterId: string;
+    /** P1：'poke'（實驗者戳）| 'note'（留言）；P1b 鏈側三源再擴。 */
+    kind: 'poke' | 'note';
+    text: string;
+    atRealMs: number;
+}
+export interface InterludeInput {
+    characterId: string;
+    name: string;
+    /** debounce 窗內合併後的全部刺激。 */
+    stimuli: InterludeStimulus[];
+    clock: WorldClock;
+    /** mirror 世界的日期標籤（民國十五年八月五日）；tick 世界缺省。 */
+    dateLabel?: string;
+    /** 行當節律「此刻本該在哪」一行（有則附）。 */
+    activityHint?: string;
+}
+export interface InterludeReply {
+    /** 聽見後的一句回應（可含動作記述）。 */
+    response: string;
+    /** 選配：記一筆心事（入長期記憶）。 */
+    memoryNote?: string;
+}
+// SceneAgentPort 選配座席：
+interlude?(input: InterludeInput): Promise<InterludeReply | null>;
+```
+
+`WorldData` 選配欄位（只加不改名不刪）：`pendingStimuli?`、
+`interludeLedger?: Record<charId, { day, count }>`（日變歸零）、
+`interludesSinceLastTick?: InterludeRecord[]`。
+
+`src/interlude.ts`（新）：`runInterludes(w, deps, opts)` ——
+按角色分組 pendingStimuli；最老刺激齡 ≥ `debounceMs`（預設 60s）才 due；
+預算（預設 6/角色/日，鍵在 clock.day）超出者**留佇列給下一大拍**；
+呼 `agent.interlude`（座席缺席同樣留給大拍）；`memoryNote` 走
+`recall.remember(charId, text, { day })`；紀錄 append 至
+`interludesSinceLastTick` 並回傳。`InterludeRecord = { id, characterId,
+name, stimuli, response, memoryNote?, realMs, day, partOfDay, tick }`。
+
+tick pipeline：拍首 drain `interludesSinceLastTick` → 涉事角色各得一行
+世情 percept（「幕間：…」），drain 後清空——大拍**聽說**折子，不重演。
+
+adapters：`FakeSceneAgent.interlude` 確定性實作（零鑰零費）；
+`RunnerSceneAgent.interlude` 走既有 per-character session 一輪，嚴格 JSON。
+
+### A2 lab（第一消費者，錄時重播）
+
+- `run-config`：`timeMode?: 'tick' | 'mirror'`（預設 tick）；
+  `interlude?: { debounceMs, dailyBudget }`。
+- manager：mirror 卷 → `MirrorClock({ epochRealMs: 卷創建 ms, cfg:
+  SPRING_SNOW_MIRROR })`；tick 紀錄加 `realMs?` / `dateLabel?` /
+  `skippedBuckets?`（types 只加）；折子另記 `interludes.jsonl`。
+  重播讀錄下的時刻，不再取樣牆鐘。
+- **活著驅動**：`lab-run.json` 加 `alive?: boolean`；manager 內 per-run
+  interval（~45s）查兩件事——大拍 due（現在的 bucket 序 > 上一拍取樣的
+  bucket 序 → 排 **1** 拍，跨多界仍 1 拍並記 `skippedBuckets`）、折子 due
+  （`runInterludes`）。全部走 manager 既有 run 序列（單寫者）。
+  server 重啟後 lazy 重臂：任何觸及 alive 卷的請求即重掛 interval。
+- API：control 加 `{action:'alive', on}` 與 `{action:'stimulus',
+  characterId, text}`（或獨立 route）。
+
+### A3 UI
+
+- 建卷表單「時間」select：排演拍（預設）／與現實同刻·早百年。
+- mirror 卷 run 頁 header：`StoryClock`（reuse `components/StoryClock`）
+  ＋日期標籤＋「活著」開關（僅 mirror 卷顯示）。
+- 戳世界：選角色＋一句話 → stimulus；折子回應以獨立樣式卡入拍流（標「折子」）。
+- catch-up：帶 `skippedBuckets` 的拍前顯示「歇了 N 拍」一行。
+
+### A4 範圍外（防蔓延）
+
+起念 timer（P2）、台柱/班底 tier 欄位（P2——P1 全員可被戳）、
+鏈側接線（P1b）、presence 面板進階版、天光日出。
+
 ## 八之二、外部提案評審記錄（婉拒清單）
 
 一份外部設計說明與本設計方向收斂（時間連續、事件喚醒、拒絕 1440 tick、
