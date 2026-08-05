@@ -6,6 +6,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { InterludeRecord } from '@endless-story/engine';
 import { parseDossierHeader } from '@endless-story/runner/services/event-dossier';
 import type { EpistemicDossierBundle } from '@endless-story/shared';
 import { assertSafeId, runDir } from './paths';
@@ -47,6 +48,33 @@ export function readTickRecords(runId: string): LabTickRecord[] {
 export function tailTickRecords(runId: string, n: number): LabTickRecord[] {
     const all = readTickRecords(runId);
     return all.slice(-n);
+}
+
+/** 折子紀錄——`interludes.jsonl`（一行一折，見 manager.ts 的折子 serialized job）。
+ *  Absent file ⇒ this run has never had a folio run yet (tick 卷 or a mirror
+ *  卷 that hasn't been touched by 捎話): empty, not an error. */
+export function readInterludeRecords(runId: string): InterludeRecord[] {
+    const file = path.join(runDir(runId), 'interludes.jsonl');
+    let text: string;
+    try {
+        text = fs.readFileSync(file, 'utf8');
+    } catch {
+        return [];
+    }
+    const out: InterludeRecord[] = [];
+    for (const line of text.split('\n')) {
+        if (!line.trim()) continue;
+        try {
+            out.push(JSON.parse(line) as InterludeRecord);
+        } catch {
+            // a torn trailing line (crash mid-append) is skipped
+        }
+    }
+    return out;
+}
+
+export function tailInterludeRecords(runId: string, n: number): InterludeRecord[] {
+    return readInterludeRecords(runId).slice(-n);
 }
 
 /** Flatten tick records into live-beat shapes (seq/ts assigned by the caller) —

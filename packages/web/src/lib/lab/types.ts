@@ -53,6 +53,14 @@ export interface LabRunConfig {
      *  structural layer (台詞＋心下＋事件) always runs for the whole cast; only the
      *  presentation layer is gated. Absent/empty ⇒ everybody, as before. */
     trackedCharacterNames?: string[];
+    /** 時間法則（見 docs/narrative/WORLD_TIME_MIRROR.md）——'tick'＝排演拍（預設，
+     *  day/時辰由 currentTick 推導）；'mirror'＝鏡像時間（鐘面走真實時刻，年份減一百，
+     *  時辰邊界即大拍邊界）。舊卷缺此欄一律當 'tick'，byte-identical。 */
+    timeMode?: 'tick' | 'mirror';
+    /** 折子節律（喚醒層 P1）——debounce 合併窗與每人每日折子預算。引擎本身另有
+     *  預設（60s／6），這裡只在卷主動調校時覆寫；規範化後永遠給一組具體數字，
+     *  夾在合理範圍內（見 run-config.ts）。 */
+    interlude?: { debounceMs: number; dailyBudget: number };
 }
 
 /** lab-run.json — one per run directory; immutable provenance + lineage. */
@@ -65,6 +73,13 @@ export interface LabRunMeta {
     parentRunId?: string;
     forkedAtTick?: number;
     config: LabRunConfig;
+    /** mirror 卷的紀元錨點——創卷那一刻的真實毫秒，故事第 1 日錨在此。分卷沿用
+     *  母卷的紀元（日期連續）；復活／新卷各起新紀元。tick 卷不設此欄。 */
+    epochRealMs?: number;
+    /** 「活著」開關（僅 mirror 卷有意義）：on 時 manager 掛一個 per-run 巡佇列
+     *  driver，時辰邊界自動打拍、捎話幾十秒內起折子；off／缺席＝靜止，一切
+     *  仍可手動撥拍與捎話，只是沒人自動巡。 */
+    alive?: boolean;
 }
 
 export type LabRunPhase = 'idle' | 'running' | 'error';
@@ -370,7 +385,36 @@ export interface LabTickRecord {
     povTrackedIds?: string[];
     /** 背景結算: hunger settled offstage, one clause each (never a scene). */
     backgroundNeeds?: string[];
+    // ── mirror 卷專屬（喚醒層 P1 · 附錄 A）——additive, absent on tick 卷 / older lines.
+    /** 這一拍取樣當下的真實毫秒（MirrorClock 實際取用的那個 `Date.now()`）——
+     *  重播讀這個值，不再取樣牆鐘（錄時重播紀律）。 */
+    realMs?: number;
+    /** 「民國十五年八月五日」——由 `realMs` 推得的敘事日期標籤，tick 卷缺席。 */
+    dateLabel?: string;
+    /** 「活著」driver 的補算拍才有：跨了幾個時辰邊界才被巡到（恆為 1 拍，
+     *  這裡記的是「歇了幾拍」的事實，不是補演的拍數——見六之五）。 */
+    skippedBuckets?: number;
     finishedAt: string;
+}
+
+/** 折子（喚醒層 P1）——拍與拍之間、外來捎話喚起的一次有界演繹，供 UI 的折子卡
+ *  消費。與引擎 `InterludeRecord` 同構，換上 lab 顯示慣用的淺層形狀（無需
+ *  characterId 以外的引擎內部細節）。 */
+export interface LabInterludeLive {
+    id: string;
+    characterId: string;
+    name: string;
+    /** Uploaded portrait (by character name), if any. */
+    portraitUrl?: string;
+    day: number;
+    tick: number;
+    partOfDay: string;
+    /** 落款的真實毫秒——這一折在真實時間裡的位置。 */
+    realMs: number;
+    /** debounce 窗內合併聽見的全部捎話。 */
+    stimuli: Array<{ text: string; kind: 'poke' | 'note' }>;
+    response: string;
+    memoryNote?: string;
 }
 
 /** World-physics config surface the UI may edit while a run is idle. */

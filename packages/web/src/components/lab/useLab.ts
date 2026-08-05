@@ -56,7 +56,7 @@ export const labApi = {
     deleteRun: (id: string) => request<{ deleted: string }>(`/api/lab/runs/${id}`, { method: 'DELETE' }),
     patchRun: (id: string, patch: { title?: string; note?: string }) =>
         request<{ meta: LabRunMeta }>(`/api/lab/runs/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
-    control: (id: string, body: { action: string; ticks?: number; title?: string; note?: string }) =>
+    control: (id: string, body: { action: string; ticks?: number; title?: string; note?: string; on?: boolean; characterId?: string; text?: string }) =>
         request<{ meta?: LabRunMeta; queued?: number }>(`/api/lab/runs/${id}/control`, {
             method: 'POST',
             body: JSON.stringify(body),

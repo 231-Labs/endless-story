@@ -17,12 +17,40 @@
 
 import type { LabRunConfig } from './types';
 
-/** What a client may send. Every field optional; this function supplies the law. */
-export type LabRunConfigInput = Partial<LabRunConfig> & { presetId?: string };
+/** What a client may send. Every field optional; this function supplies the law.
+ *  `interlude` is deep-partial — a caller tuning only one of debounceMs/dailyBudget
+ *  is legal input (the other falls back to the engine's own default below). */
+export type LabRunConfigInput = Omit<Partial<LabRunConfig>, 'interlude'> & {
+    presetId?: string;
+    interlude?: Partial<NonNullable<LabRunConfig['interlude']>>;
+};
 
 const DEFAULT_TICKS_PER_DAY = 6;
 const MIN_TICKS_PER_DAY = 2;
 const MAX_TICKS_PER_DAY = 12;
+
+// 折子節律（喚醒層 P1）——鏡子引擎自己的預設（interlude.ts 的
+// DEFAULT_INTERLUDE_DEBOUNCE_MS / DEFAULT_INTERLUDE_DAILY_BUDGET）；這裡另夾
+// 一圈「不至於荒謬」的邊界，免得表單傳進一個 1ms 的 debounce 或 9999 的預算。
+const DEFAULT_INTERLUDE_DEBOUNCE_MS = 60_000;
+const MIN_INTERLUDE_DEBOUNCE_MS = 5_000;
+const MAX_INTERLUDE_DEBOUNCE_MS = 600_000;
+const DEFAULT_INTERLUDE_DAILY_BUDGET = 6;
+const MAX_INTERLUDE_DAILY_BUDGET = 50;
+
+/** 折子節律的規範化——永遠回一組具體數字（不留半殘的 partial），junk 一律回落
+ *  到引擎自己的預設，呼應 ticksPerDay 「junk 落回預設，不產生一個壞掉的鐘」慣例。 */
+function normalizeInterlude(raw: LabRunConfigInput['interlude']): NonNullable<LabRunConfig['interlude']> {
+    const debounceRaw = Number(raw?.debounceMs);
+    const budgetRaw = Number(raw?.dailyBudget);
+    const debounceMs = Number.isFinite(debounceRaw) && debounceRaw > 0
+        ? Math.max(MIN_INTERLUDE_DEBOUNCE_MS, Math.min(MAX_INTERLUDE_DEBOUNCE_MS, Math.round(debounceRaw)))
+        : DEFAULT_INTERLUDE_DEBOUNCE_MS;
+    const dailyBudget = Number.isInteger(budgetRaw) && budgetRaw >= 0
+        ? Math.min(MAX_INTERLUDE_DAILY_BUDGET, budgetRaw)
+        : DEFAULT_INTERLUDE_DAILY_BUDGET;
+    return { debounceMs, dailyBudget };
+}
 
 /** Split a 「甲、乙 丙」 free-text list into trimmed names. */
 function parseNameList(raw: unknown): string[] | undefined {
@@ -67,5 +95,9 @@ export function normalizeRunConfig(input: LabRunConfigInput | undefined): LabRun
             ? Math.max(MIN_TICKS_PER_DAY, Math.min(MAX_TICKS_PER_DAY, ticks))
             : DEFAULT_TICKS_PER_DAY,
         realEmbeddings: input.realEmbeddings === true,
+        // 時間法則——'mirror' 是唯一需要明說的選擇，其餘（含缺席）一律是 'tick'，
+        // 與加這層之前的每一卷行為相同。
+        timeMode: input.timeMode === 'mirror' ? 'mirror' : 'tick',
+        interlude: normalizeInterlude(input.interlude),
     };
 }

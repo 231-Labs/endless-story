@@ -43,6 +43,7 @@ export default function LabHomePage() {
         beatPicksWant: false,
         quietPresence: false,
         ticksPerDay: 6,
+        timeMode: 'tick' as 'tick' | 'mirror',
     });
 
     const load = useCallback(async () => {
@@ -99,6 +100,7 @@ export default function LabHomePage() {
                     beatPicksWant: form.beatPicksWant,
                     quietPresence: form.quietPresence,
                     ticksPerDay: form.ticksPerDay,
+                    timeMode: form.timeMode,
                 },
             });
             router.push(`/lab/run/${meta.id}`);
@@ -348,6 +350,15 @@ export default function LabHomePage() {
                         />
                         拍
                     </label>
+                    <select
+                        value={form.timeMode}
+                        onChange={(e) => setForm({ ...form, timeMode: e.target.value === 'mirror' ? 'mirror' : 'tick' })}
+                        className="es-field px-2 py-1.5 text-xs"
+                        title="時間：排演拍＝舊制（day/時辰由拍數推導，隨手撥拍）。與現實同刻＝鐘面走真實時刻（年份減一百），時辰邊界可自動打拍，能捎話"
+                    >
+                        <option value="tick">排演拍</option>
+                        <option value="mirror">與現實同刻 · 早一百年</option>
+                    </select>
                     {seasons.length ? (
                         <select
                             value={form.seasonId}

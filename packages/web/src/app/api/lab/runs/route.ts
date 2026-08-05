@@ -43,7 +43,10 @@ export async function POST(req: Request) {
         // One normaliser, one test that walks every field — see `run-config.ts` for
         // why this is not inlined here any more.
         const config = normalizeRunConfig(body.config);
-        const meta = createRun({ title: body.title ?? config.presetId, note: body.note, config });
+        // 鏡像時間的紀元錨點——一卷創世的那一刻，故事第 1 日就錨在此；只在建卷
+        // 這一刻鑄一次（fork 沿用母卷的，見 store.ts 的 forkRun）。
+        const epochRealMs = config.timeMode === 'mirror' ? Date.now() : undefined;
+        const meta = createRun({ title: body.title ?? config.presetId, note: body.note, config, epochRealMs });
         // Seed the world eagerly so the scroll opens alive (throws early on a
         // missing LLM key rather than at the first tick).
         await labManager().open(meta.id);

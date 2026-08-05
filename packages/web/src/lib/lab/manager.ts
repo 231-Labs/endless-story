@@ -21,6 +21,7 @@ import {
     LocalClock,
     LocalEconomy,
     LocalRecall,
+    MirrorClock,
     TickFilesystemTransaction,
     WorldState,
     applySeasonFrame,
@@ -29,10 +30,14 @@ import {
     loadEventDeckFile,
     loadSeasonFrameFile,
     reconcileSeasonObjects,
+    runInterludes,
     runTick,
+    sampleMirrorClock,
     seedAcquaintance,
     seedRelationshipViews,
     seedSeasonOpening,
+    type ClockPort,
+    type InterludeRecord,
     type RawPreset,
     type SceneAgentPort,
     type SeasonFrame,
@@ -43,15 +48,22 @@ import { auditSeasonEconomy } from '@endless-story/engine/core/season-economy';
 import { writeTickDossiers } from '@endless-story/engine/dossier-artifact';
 import { refreshSeasonEditorial, type AnthologyComposer } from '@endless-story/engine/editorial-artifact';
 import { loadLLMConfig, resolveTextProvider } from '@endless-story/llm';
-import { beatsFromTickRecords, tailTickRecords } from './artifacts';
+import { SPRING_SNOW_MIRROR, bucketsBetween, formatStoryDate, storyNow } from '@endless-story/shared/world-clock';
+import { beatsFromTickRecords, tailInterludeRecords, tailTickRecords } from './artifacts';
 import { writeCheckpoint } from './checkpoints';
 import { readJson, runDir, writeJsonAtomic } from './paths';
-import { readRunMeta, writeRunStatus } from './store';
+import { readRunMeta, writeRunMeta, writeRunStatus } from './store';
 import { deckDirFor, readSeedRaw, seasonDirFor, seedDirFor } from './seeds';
-import type { LabLiveBeat, LabRunMeta, LabRunPhase, LabTickRecord } from './types';
+import type { LabInterludeLive, LabLiveBeat, LabRunMeta, LabRunPhase, LabTickRecord } from './types';
 
 const BEAT_RING_CAP = 600;
 const LOG_RING_CAP = 300;
+/** 折子環——低頻串流，不必如拍流那樣深；夠 UI 顯示「最近折子」即可。 */
+const INTERLUDE_RING_CAP = 60;
+/** 「活著」driver 的巡佇列間隔——AGENT_WAKE_LAYER.md 附錄 A 給的量級（~45s）：
+ *  比引擎的 60s debounce 窗略短，讓折子在窗滿齡後盡快被巡到，體感仍是
+ *  「幾十秒」而非「下一分鐘」。 */
+const ALIVE_POLL_MS = 45_000;
 
 const ECONOMY_ACTION_LABEL: Record<string, string> = {
     purchase: '購置',
@@ -109,6 +121,9 @@ interface RunManifest {
     quietPresence: boolean;
     /** 事件牌組 id in play. Absent ⇒ this run has no external-push layer. */
     deck?: string;
+    /** 時間法則——凍在創卷那一刻，換模式一律開新卷（與 preset/provider 同一紀律）。
+     *  舊卷的 manifest 沒有這欄；比對時視同 'tick'（見 open() 的 frozen-check）。 */
+    timeMode: 'tick' | 'mirror';
 }
 
 export interface ActiveRun {
@@ -124,6 +139,22 @@ export interface ActiveRun {
     phase: LabRunPhase;
     lastError?: string;
     pendingTicks: number;
+    /** 驅動端排的補算拍要帶的 `skippedBuckets`（見 driverTick）——單次性：下一次
+     *  `appendTickRecord` 讀了就清。手動撥的拍恆為 undefined。 */
+    pendingSkippedBuckets?: number;
+    /** 折子 serialized job 排隊旗標——與 pendingTicks 同一條隊（loop() 的
+     *  while 迴圈），絕不與拍或另一次折子並行。 */
+    pendingInterlude: boolean;
+    /** 折子環——最近幾折，供 live snapshot／UI 折子卡消費（newest last）。 */
+    interludes: Array<Omit<LabInterludeLive, 'portraitUrl'>>;
+    /** mirror 卷才有：MirrorClock 每次 `advance()` 實際取用的那個 `Date.now()`，
+     *  由建構時注入的 `now` 包一層寫進來——tick 紀錄的 `realMs`／折子的
+     *  `dateLabel` 都讀這裡，不再另外取樣牆鐘（同一次取樣，兩處一致）。 */
+    mirrorSample?: { current?: number };
+    /** mirror 卷才有：最近一次「已落拍」的真實毫秒（tick 紀錄的 `realMs` 或未
+     *  打過拍時的 `epochRealMs`）——driver 拿它跟 `Date.now()` 比 bucket 序，
+     *  不必每 45s 重讀 ticks.jsonl。 */
+    lastTickRealMs?: number;
     /** Feed epoch — changes when the run is (re)opened in a process, so live
      *  clients know their beat cursor belongs to a different seq space. */
     epoch: string;
@@ -138,6 +169,10 @@ export interface ActiveRun {
 
 function stateDirOf(runId: string): string {
     return path.join(runDir(runId), 'state');
+}
+
+function interludesFileOf(runId: string): string {
+    return path.join(runDir(runId), 'interludes.jsonl');
 }
 
 function ticksFileOf(runId: string): string {
@@ -155,6 +190,11 @@ function countLines(file: string): number {
 
 export class LabRunManager {
     private readonly active = new Map<string, ActiveRun>();
+    /** 「活著」driver 的 per-run interval registry——process-wide、keyed by runId.
+     *  Survives Next.js dev HMR the same way `active` does: both live on the
+     *  `LabRunManager` instance the module-level `labManager()` singleton pins
+     *  to `globalThis` (see bottom of file). */
+    private readonly aliveTimers = new Map<string, ReturnType<typeof setInterval>>();
 
     /** Open (or return the already-open) run. Restores from snapshot when one
      *  exists, otherwise seeds a fresh world from the run's configured seed. */
@@ -178,7 +218,32 @@ export class LabRunManager {
             embeddings: cfg.realEmbeddings ? 'auto' : 'deterministic',
         });
         const archive = new FileArchive(path.join(out, 'archive'));
-        const clock = new LocalClock();
+        const timeMode: 'tick' | 'mirror' = cfg.timeMode === 'mirror' ? 'mirror' : 'tick';
+        // mirror 卷的紀元錨點：正常路徑下由建卷 route 在 lab-run.json 就寫好了；
+        // 這裡的 fallback 只防禦手改／殘缺的 meta——補一個並立刻落檔，往後每次
+        // 開卷都讀同一個錨，紀元不會因為伺服器重啟而漂移。
+        let epochRealMs: number | undefined;
+        if (timeMode === 'mirror') {
+            epochRealMs = meta.epochRealMs;
+            if (epochRealMs == null) {
+                epochRealMs = Date.now();
+                meta.epochRealMs = epochRealMs;
+                writeRunMeta(runId, meta);
+            }
+        }
+        // MirrorClock 每次 advance() 取樣的真實毫秒寫進這個小盒子——tick 紀錄的
+        // realMs／折子的 dateLabel 都讀它，同一次取樣兩處一致（見 ActiveRun 註解）。
+        const mirrorSample: { current?: number } = {};
+        const clock: ClockPort = timeMode === 'mirror'
+            ? new MirrorClock({
+                  epochRealMs: epochRealMs!,
+                  cfg: SPRING_SNOW_MIRROR,
+                  now: () => {
+                      mirrorSample.current = Date.now();
+                      return mirrorSample.current;
+                  },
+              })
+            : new LocalClock();
         const economy = new LocalEconomy();
 
         let agent: SceneAgentPort;
@@ -225,11 +290,17 @@ export class LabRunManager {
             beatPicksWant: cfg.beatPicksWant ?? false,
             quietPresence: cfg.quietPresence ?? false,
             ...(cfg.deckId ? { deck: cfg.deckId } : {}),
+            timeMode,
         };
         const previous = readJson<RunManifest>(manifestFile);
         if (previous) {
-            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'heartsCanFade', 'beatPicksWant', 'quietPresence'] as const) {
-                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'heartsCanFade' || key === 'beatPicksWant' || key === 'quietPresence' ? (previous[key] ?? false) : previous[key];
+            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'heartsCanFade', 'beatPicksWant', 'quietPresence', 'timeMode'] as const) {
+                // 舊卷的 manifest 沒有 timeMode 這欄（喚醒層之前寫的）——缺席一律
+                // 當 'tick'，與布林旗標的「缺席當 false」同一套回落，舊卷才不會
+                // 因為加了這個新檢查就打不開。
+                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'heartsCanFade' || key === 'beatPicksWant' || key === 'quietPresence' ? (previous[key] ?? false)
+                    : key === 'timeMode' ? (previous.timeMode ?? 'tick')
+                    : previous[key];
                 if (prior !== manifest[key]) {
                     // A run's manifest is frozen at creation so a diagnostic export never
                     // lies about which model/preset/flags wrote which tick. The usual
@@ -261,6 +332,12 @@ export class LabRunManager {
                 ticksPerDay: cfg.ticksPerDay,
             });
             world = created.world;
+            // 鏡像時間：創世那一刻就該站在真實此刻，不是 tick 0 的假鐘面。
+            // createWorldFromPreset 已用 makeClock(ticksPerDay,0) 佈了一個 tick 鐘，
+            // mirror 卷在此覆寫成當下取樣（day 1 錨在 epochRealMs 自己）。
+            if (timeMode === 'mirror') {
+                world.data.clock = sampleMirrorClock(epochRealMs!, epochRealMs!, SPRING_SNOW_MIRROR, 0);
+            }
             if (seasonFrame) applySeasonFrame(world, seasonFrame);
             if (cfg.relationshipFallback) {
                 world.data.relationshipFallback = true;
@@ -305,6 +382,10 @@ export class LabRunManager {
             world.snapshot(stateDir);
         }
 
+        // mirror 卷的「上一拍取樣 realMs」——driver 拿它跟 Date.now() 比 bucket 序
+        // （見 driverTick）；卷還沒打過拍就以紀元自己起算（AGENT_WAKE_LAYER 附錄 A）。
+        const lastTick = timeMode === 'mirror' ? tailTickRecords(runId, 1)[0] : undefined;
+
         const run: ActiveRun = {
             meta,
             raw,
@@ -317,6 +398,9 @@ export class LabRunManager {
             model,
             phase: 'idle',
             pendingTicks: 0,
+            pendingInterlude: false,
+            interludes: [],
+            ...(timeMode === 'mirror' ? { mirrorSample, lastTickRealMs: lastTick?.realMs ?? epochRealMs } : {}),
             epoch: `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
             beatSeq: 0,
             beats: [],
@@ -328,6 +412,8 @@ export class LabRunManager {
         // Backfill the live ring from the last recorded ticks so a reopened run
         // is never a blank scroll while waiting for its next beat.
         for (const beat of beatsFromTickRecords(tailTickRecords(runId, 2))) this.pushBeat(run, beat);
+        // 折子環同理回填——重開的卷不該讓折子卡空白等到下一折。
+        for (const record of tailInterludeRecords(runId, INTERLUDE_RING_CAP)) this.pushInterlude(run, record);
         this.active.set(runId, run);
         this.persistStatus(run);
         return run;
@@ -342,6 +428,74 @@ export class LabRunManager {
         const run = this.active.get(runId);
         if (run && run.phase === 'running') throw new Error('run is mid-tick — pause it first');
         this.active.delete(runId);
+        this.disarmAlive(runId);
+    }
+
+    private disarmAlive(runId: string): void {
+        const timer = this.aliveTimers.get(runId);
+        if (!timer) return;
+        clearInterval(timer);
+        this.aliveTimers.delete(runId);
+    }
+
+    /**
+     * Lazy 重臂——冪等：任何觸及一卷的請求（live poll、control，見 API 呼叫點）
+     * 都呼叫這個。伺服器重啟後 registry 是空的，只要卷仍標記 `alive: true`，
+     * 下一次有人碰到這一卷（開頁面即輪詢 live）就重新掛上 interval；卷不再
+     * mirror 或 alive 已關，順手摘掉——兩個方向都自我修正，不需要另外的關卷通知。
+     */
+    armIfAlive(runId: string): void {
+        const meta = readRunMeta(runId);
+        const shouldRun = meta != null && meta.alive === true && meta.config.timeMode === 'mirror';
+        if (!shouldRun) {
+            this.disarmAlive(runId);
+            return;
+        }
+        if (this.aliveTimers.has(runId)) return; // 已掛著，冪等
+        const timer = setInterval(() => {
+            void this.driverTick(runId);
+        }, ALIVE_POLL_MS);
+        timer.unref?.();
+        this.aliveTimers.set(runId, timer);
+    }
+
+    /**
+     * 「活著」driver 的一巡——大拍 due 就排一拍（跨多界仍一拍，記 skippedBuckets）、
+     * 折子 due（佇列非空）就排一次折子 job；兩者都只 enqueue，走 loop() 既有的
+     * 單一寫者隊，絕不在此直接寫世界。busy 中的卷本巡讓路，下一巡再看——
+     * 「driver 只 enqueue，絕不並行執行」。
+     */
+    private async driverTick(runId: string): Promise<void> {
+        let run: ActiveRun;
+        try {
+            run = await this.open(runId);
+        } catch {
+            // 卷開不起來了（多半是被焚毀）——沒有東西可巡，摘牌。
+            this.disarmAlive(runId);
+            return;
+        }
+        if (!run.meta.alive || run.meta.config.timeMode !== 'mirror') {
+            this.disarmAlive(runId); // 設定在別處被改了（關「活著」／換卷模式不可能，但防禦）
+            return;
+        }
+        if (run.busy) return; // 正在走著別的事——讓路，下一巡再看
+
+        const nowMs = Date.now();
+        const lastMs = run.lastTickRealMs ?? run.meta.epochRealMs ?? nowMs;
+        const crossed = bucketsBetween(lastMs, nowMs, SPRING_SNOW_MIRROR);
+        let queued = false;
+        if (crossed > 0) {
+            // 跨了幾個時辰邊界都只補一拍——嚴禁補演（AGENT_WAKE_LAYER §六之五）；
+            // 跨了幾界只記進這一拍的 skippedBuckets，供 UI「歇了 N 拍」一行。
+            run.pendingSkippedBuckets = crossed;
+            run.pendingTicks += 1;
+            queued = true;
+        }
+        if (run.world.data.pendingStimuli?.length) {
+            run.pendingInterlude = true;
+            queued = true;
+        }
+        if (queued) void this.loop(run);
     }
 
     /** Guard for fork/delete: the run directory must not be mid-tick. */
@@ -372,6 +526,22 @@ export class LabRunManager {
         if (run.beats.length > BEAT_RING_CAP) run.beats.splice(0, run.beats.length - BEAT_RING_CAP);
     }
 
+    private pushInterlude(run: ActiveRun, record: InterludeRecord): void {
+        run.interludes.push({
+            id: record.id,
+            characterId: record.characterId,
+            name: record.name,
+            day: record.day,
+            tick: record.tick,
+            partOfDay: record.partOfDay,
+            realMs: record.realMs,
+            stimuli: record.stimuli.map((s) => ({ text: s.text, kind: s.kind })),
+            response: record.response,
+            ...(record.memoryNote ? { memoryNote: record.memoryNote } : {}),
+        });
+        if (run.interludes.length > INTERLUDE_RING_CAP) run.interludes.splice(0, run.interludes.length - INTERLUDE_RING_CAP);
+    }
+
     private persistStatus(run: ActiveRun): void {
         const c = run.world.data.clock;
         writeRunStatus(run.meta.id, {
@@ -386,7 +556,7 @@ export class LabRunManager {
         });
     }
 
-    private appendTickRecord(run: ActiveRun, report: TickReport): void {
+    private appendTickRecord(run: ActiveRun, report: TickReport, mirrorRealMs?: number): void {
         const record: LabTickRecord = {
             day: report.day,
             tick: report.tick,
@@ -457,10 +627,58 @@ export class LabRunManager {
                 : {}),
             ...(report.povTrackedIds?.length ? { povTrackedIds: report.povTrackedIds } : {}),
             ...(report.backgroundNeeds?.length ? { backgroundNeeds: report.backgroundNeeds } : {}),
+            // mirror 卷專屬——這一拍在真實時間裡的落點＋由它推得的敘事日期標籤，
+            // 重播讀這裡記下的值，不再取樣牆鐘（錄時重播紀律，見 interlude.ts 的
+            // 同一套規矩）。tick 卷／mirror 卷還沒有任何取樣時，兩欄都不寫。
+            ...(mirrorRealMs != null
+                ? { realMs: mirrorRealMs, dateLabel: formatStoryDate(storyNow(mirrorRealMs, SPRING_SNOW_MIRROR).date) }
+                : {}),
+            // 「活著」driver 排的補算拍才有——單次性欄位，讀完即清（見下）。
+            ...(run.pendingSkippedBuckets != null ? { skippedBuckets: run.pendingSkippedBuckets } : {}),
             finishedAt: new Date().toISOString(),
         };
+        if (mirrorRealMs != null) run.lastTickRealMs = mirrorRealMs;
+        run.pendingSkippedBuckets = undefined;
         fs.appendFileSync(ticksFileOf(run.meta.id), `${JSON.stringify(record)}\n`, 'utf8');
         run.eventsTotal += report.events.length;
+    }
+
+    /**
+     * 折子 serialized job——與拍共用 loop() 的單一寫者隊（見下）：載入的世界即
+     * `run.world`（已在記憶體中，同一個引用），跑完把有成局的折子落 world.json
+     * ＋ append 進 `interludes.jsonl`（新檔，一行一折）＋推進折子環供 live snapshot。
+     * 沒有一折成局（全部未滿齡／超預算／座席缺席）就什麼都不寫——避免每 45s
+     * 巡一次都白產生一份 snapshot。
+     */
+    private async runInterludeBatch(run: ActiveRun, stateDir: string): Promise<void> {
+        const iCfg = run.meta.config.interlude;
+        // 折子落款在「此刻」，不是上一拍的舊取樣——與 nowMs 用同一個真實毫秒，
+        // 折子紀錄的 realMs 與這裡顯示的 dateLabel 才是同一件事的兩種寫法。
+        const nowMs = Date.now();
+        const dateLabel = run.meta.config.timeMode === 'mirror'
+            ? formatStoryDate(storyNow(nowMs, SPRING_SNOW_MIRROR).date)
+            : undefined;
+        let records: InterludeRecord[];
+        try {
+            records = await runInterludes(run.world, { agent: run.deps.agent, recall: run.deps.recall }, {
+                nowMs,
+                debounceMs: iCfg?.debounceMs,
+                dailyBudget: iCfg?.dailyBudget,
+                ...(dateLabel ? { dateLabel } : {}),
+            });
+        } catch (error) {
+            // 折子失手不是刺激的錯——原封留在佇列，下一次巡（driver 或另一次戳）再試。
+            this.log(run, `[interlude] 折子演繹失手：${error instanceof Error ? error.message : String(error)}`);
+            return;
+        }
+        if (!records.length) return;
+        run.world.snapshot(stateDir);
+        const file = interludesFileOf(run.meta.id);
+        for (const record of records) {
+            fs.appendFileSync(file, `${JSON.stringify(record)}\n`, 'utf8');
+            this.pushInterlude(run, record);
+            this.log(run, `[interlude] ${record.name}：「${record.response.slice(0, 40)}」`);
+        }
     }
 
     /** Queue N ticks. Returns immediately; the loop runs in-process. */
@@ -485,8 +703,54 @@ export class LabRunManager {
         const out = runDir(run.meta.id);
         const stateDir = stateDirOf(run.meta.id);
         try {
-            while (run.pendingTicks > 0) {
+            // 折子與拍同一條隊：pendingInterlude 優先處理（通常很快，一兩個 LLM
+            // 呼叫），處理完才繼續走 pendingTicks——兩者互斥，這個 while 本身就是
+            // AGENT_WAKE_LAYER §五「一個世界任何時刻至多一個演繹在寫」的落實。
+            while (run.pendingTicks > 0 || run.pendingInterlude) {
+                if (run.pendingInterlude) {
+                    run.pendingInterlude = false;
+                    await this.runInterludeBatch(run, stateDir);
+                    continue;
+                }
                 const tick = run.world.data.clock.currentTick;
+                // 這一拍的 report 描述的是「走這一拍之前」那個 w.clock（day/tickOfDay
+                // 皆取自它，見 tick.ts 的 `today = c.day`）——它是被「上一拍的
+                // advance() 呼叫」（或創世那一次 sampleMirrorClock）取樣出來的，
+                // 不是本次 runTick 內部即將發生的那次 advance()。所以要在呼叫
+                // runTick、讓 mirrorSample.current 被下一次取樣蓋掉之前，先把它
+                // 讀出來——這才是「這一拍」在真實時間裡的落點。
+                // Fallback chain matters across a process restart: a freshly
+                // reopened run's `mirrorSample.current` starts empty (this
+                // process has never called advance() yet) even though the
+                // world's `c` was sampled long ago — `lastTickRealMs` (seeded
+                // from the last tick record, or the epoch for a virgin world)
+                // is the correct stand-in, NOT the epoch directly.
+                const mirrorRealMsForThisTick = run.meta.config.timeMode === 'mirror'
+                    ? (run.mirrorSample?.current ?? run.lastTickRealMs ?? run.meta.epochRealMs)
+                    : undefined;
+                // Captured before appendTickRecord consumes+clears the field below —
+                // used to preface the beat stream with a 「歇了 N 拍」note so a
+                // catch-up tick reads as catch-up, not as an ordinary beat.
+                const skippedBucketsForThisTick = run.pendingSkippedBuckets;
+                if (skippedBucketsForThisTick) {
+                    // 卡片前一行「歇了 N 拍」——落在這一拍自己的 onBeat／onMoves 之前
+                    // （這裡先推，runTick 的回呼稍後才觸發），讀起來像補算拍的引子，
+                    // 不是它的一部分。純顯示用；不落 ticks.jsonl（那邊已有 skippedBuckets
+                    // 欄位可查），過程式的、不持久，重開卷即消失也無妨。
+                    const c = run.world.data.clock;
+                    this.pushBeat(run, {
+                        day: c.day,
+                        tick: c.currentTick,
+                        clock: c.partOfDay,
+                        sceneId: '',
+                        sceneName: '歇拍',
+                        isPrivate: false,
+                        characterId: '__world__',
+                        name: '世界',
+                        text: `班子歇了 ${skippedBucketsForThisTick} 拍，此刻再開鑼。`,
+                        kind: 'world',
+                    });
+                }
                 run.transaction.begin(tick);
                 let report: TickReport;
                 try {
@@ -559,7 +823,7 @@ export class LabRunManager {
                     }
                 }
                 run.pendingTicks -= 1;
-                this.appendTickRecord(run, report);
+                this.appendTickRecord(run, report, mirrorRealMsForThisTick);
                 // 時光快照 — freeze the just-committed world as this tick's
                 // checkpoint so 演員訪談室 can visit "the character right after
                 // tick N" later. Best-effort: a failed copy logs, never fatals.
@@ -588,6 +852,10 @@ export class LabRunManager {
         } catch (error) {
             run.phase = 'error';
             run.pendingTicks = 0;
+            run.pendingInterlude = false;
+            // 這一拍沒能落 appendTickRecord，該欄位還沒被消化——別讓它漂到未來
+            // 某一拍不相干的紀錄上。
+            run.pendingSkippedBuckets = undefined;
             run.lastError = error instanceof Error ? error.message : String(error);
             this.log(run, `[fatal] ${run.lastError}`);
         } finally {

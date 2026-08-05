@@ -57,6 +57,22 @@ export function readRunStatus(runId: string): LabRunStatusFile | null {
     return readJson<LabRunStatusFile>(path.join(runDir(runId), RUN_STATUS_FILE));
 }
 
+/** Overwrite lab-run.json wholesale — callers pass a full, already-merged meta
+ *  (mirrors `writeRunStatus`'s shape for the sibling file). */
+export function writeRunMeta(runId: string, meta: LabRunMeta): void {
+    writeJsonAtomic(path.join(runDir(runId), RUN_META_FILE), meta);
+}
+
+/** 「活著」開關——落 lab-run.json；呼叫端（control route）另需知會 manager 的
+ *  driver registry（`armIfAlive`）去掛上或摘下巡佇列 interval。 */
+export function setRunAlive(runId: string, alive: boolean): LabRunMeta {
+    const meta = readRunMeta(runId);
+    if (!meta) throw new Error(`run not found: ${runId}`);
+    const next: LabRunMeta = { ...meta, alive };
+    writeRunMeta(runId, next);
+    return next;
+}
+
 export function writeRunStatus(runId: string, status: LabRunStatusFile): void {
     writeJsonAtomic(path.join(runDir(runId), RUN_STATUS_FILE), status);
 }
@@ -82,6 +98,8 @@ export function createRun(input: {
     parentRunId?: string;
     forkedAtTick?: number;
     id?: string;
+    /** mirror 卷的紀元錨點（創卷真實毫秒）。tick 卷／未給即缺席。 */
+    epochRealMs?: number;
 }): LabRunMeta {
     const id = input.id ?? newRunId(input.title);
     const dir = runDir(id);
@@ -95,6 +113,7 @@ export function createRun(input: {
         parentRunId: input.parentRunId,
         forkedAtTick: input.forkedAtTick,
         config: input.config,
+        ...(input.epochRealMs !== undefined ? { epochRealMs: input.epochRealMs } : {}),
     };
     writeJsonAtomic(path.join(dir, RUN_META_FILE), meta);
     return meta;
@@ -115,6 +134,9 @@ export function forkRun(sourceId: string, input: { title: string; note?: string 
         config: source.config,
         parentRunId: sourceId,
         forkedAtTick: status?.tick,
+        // 分卷沿用母卷的紀元——日期連續，不是「岔出去就重新起算」。alive 不承接：
+        // 新卷是靜場開的，driver 要操作者自己重新按下「活著」。
+        epochRealMs: source.epochRealMs,
     });
     const from = runDir(sourceId);
     const to = runDir(meta.id);
