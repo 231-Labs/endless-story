@@ -64,6 +64,8 @@ export const sagas: Saga[] = [
       partOfDay: 'dusk',
       label: '戌時三刻',
       weather: 'clear',
+      // 鏡像時間的敘事日期（民國十五年八月五日）——沒鏈也看得到日期表面。
+      date: { year: 1926, rocYear: 15, month: 8, day: 5, weekday: 4 },
     },
   },
 ];

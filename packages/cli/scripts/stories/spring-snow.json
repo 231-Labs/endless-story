@@ -9,8 +9,11 @@
       "symbol": "ENDLESS"
     },
     "time_config": {
+      "mode": "mirror",
+      "year_offset": 100,
+      "tz_offset_minutes": 480,
       "days_per_tick_bp": 1670,
-      "tick_interval_ms": 120000
+      "tick_interval_ms": 14400000
     },
     "narrative": {
       "genre_base": "風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。"

@@ -45,6 +45,8 @@ export interface AuditIssue {
 export interface WorldAuditReport {
   ok: boolean;
   day?: number;
+  /** 鏡像世界的敘事日期（「民國十五年八月五日」）；tick 世界缺席。 */
+  dateLabel?: string;
   currentTick?: number;
   castCount: number;
   openEventCount: number;
@@ -97,8 +99,10 @@ async function detectCharacterGaps(
 }
 
 function buildSummary(report: Omit<WorldAuditReport, 'summary'>): string {
+  // 鏡像世界的巡檢報日期，tick 世界仍報日序。
+  const when = report.dateLabel ?? `第 ${report.day ?? '?'} 日`;
   const lines: string[] = [
-    `【世界巡檢】第 ${report.day ?? '?'} 日 · 在班 ${report.castCount} 人 · 開放事件 ${report.openEventCount} 件`,
+    `【世界巡檢】${when} · 在班 ${report.castCount} 人 · 開放事件 ${report.openEventCount} 件`,
   ];
   if (report.issues.length === 0) {
     lines.push('- 無待處理項。');
@@ -221,6 +225,7 @@ export async function runWorldAudit(): Promise<WorldAuditReport> {
   const partial = {
     ok: true,
     day: live?.day ?? undefined,
+    dateLabel: time?.dateLabel,
     currentTick: time?.currentTick,
     castCount,
     openEventCount: openEvents.length,

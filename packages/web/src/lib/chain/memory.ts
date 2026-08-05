@@ -24,6 +24,7 @@
 import { SagaMemoryClient } from '@endless-story/memwal';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
+import { deriveWorldDay } from './world-day.js';
 import { resolveControlCapId } from './control-caps.js';
 import { writePlanIntentFromText } from './plan-intent-store.js';
 import {
@@ -166,12 +167,18 @@ export async function currentNarrativeDay(): Promise<number> {
         const client = makeSuiClient({ network: resolveNetwork() });
         const res = await read.world.getWorld(client, worldId);
         const json = res.json as unknown as {
-            state?: { current_tick?: number | string };
-            time_config?: { days_per_tick_bp?: number | string };
+            state?: { current_tick?: number | string; created_at_ms?: number | string };
+            time_config?: {
+                days_per_tick_bp?: number | string;
+                tick_interval_ms?: number | string;
+            };
         };
-        const tick = Number(json.state?.current_tick ?? 0);
-        const bp = Number(json.time_config?.days_per_tick_bp ?? 1670) || 1670;
-        return Math.floor((tick * bp) / 10_000) + 1;
+        return deriveWorldDay({
+            currentTick: Number(json.state?.current_tick ?? 0),
+            daysPerTickBp: Number(json.time_config?.days_per_tick_bp ?? 1670) || 1670,
+            tickIntervalMs: Number(json.time_config?.tick_interval_ms ?? 0) || undefined,
+            createdAtMs: Number(json.state?.created_at_ms ?? 0) || undefined,
+        });
     } catch {
         return 1;
     }

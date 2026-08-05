@@ -10,6 +10,7 @@ import { GroupedCutList } from '@/components/feed/GroupedCutList';
 import { ProductionList } from '@/components/feed/ProductionList';
 import { FeedTabs, type FeedMode } from '@/components/feed/FeedTabs';
 import { SeededDossierTeaser } from '@/components/feed/SeededDossierTeaser';
+import { formatStoryDate } from '@endless-story/shared/world-clock';
 
 export const metadata = {
   title: '梨園章回',
@@ -49,8 +50,14 @@ export default async function FeedPage({
       <header className="bg-canvas">
         <div className="px-5 pb-2 pt-8 sm:px-10 sm:pb-3 sm:pt-11">
           <div className="mx-auto max-w-6xl">
+            {/* 眉批是活時鐘的表面 —— 鏡像世界報今日的民國日期；底下各 CUT 的
+                DAY N 徽章屬考據體例，仍走整數日序，不隨之改。 */}
             <PageLeadTitleBlock
-              eyebrow={`${saga.name} · 第 ${saga.currentDay} 日`}
+              eyebrow={
+                saga.worldTime?.date
+                  ? `${saga.name} · ${formatStoryDate(saga.worldTime.date)}`
+                  : `${saga.name} · 第 ${saga.currentDay} 日`
+              }
               eyebrowMobile={saga.name}
               title={
                 <>

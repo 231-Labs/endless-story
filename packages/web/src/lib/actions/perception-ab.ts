@@ -112,7 +112,12 @@ export async function runPerceptionAbAction(opts: PerceptionAbOptions = {}): Pro
         getWorldTimeSnapshot().catch(() => null),
     ]);
     const sagaName = (sagaRes?.json as unknown as { name?: string })?.name ?? '戲班';
-    const dayLabel = worldTime ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}` : '某日';
+    // 鏡像世界報日期，tick 世界報日序。
+    const dayLabel = worldTime
+        ? worldTime.dateLabel
+            ? `${worldTime.dateLabel} · ${worldTime.partOfDay}`
+            : `第 ${worldTime.day} 日 · ${worldTime.partOfDay}`
+        : '某日';
 
     let characters: Character[] = await charactersApi.listSagaCharacters(d.sagaId).catch(() => []);
     if (characters.length === 0) characters = await charactersApi.listCharacters().catch(() => []);

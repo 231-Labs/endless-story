@@ -94,7 +94,12 @@ export async function runDailyBatchAction(
 
     // 2. World time → day / part-of-day.
     const worldTime = (await getWorldTimeSnapshot()) ?? undefined;
-    const dayLabel = worldTime ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}` : '某日';
+    // 鏡像世界報日期，tick 世界報日序。
+    const dayLabel = worldTime
+        ? worldTime.dateLabel
+            ? `${worldTime.dateLabel} · ${worldTime.partOfDay}`
+            : `第 ${worldTime.day} 日 · ${worldTime.partOfDay}`
+        : '某日';
 
     // 3. Character list (saga-scoped).
     let characters: Character[] = await charactersApi

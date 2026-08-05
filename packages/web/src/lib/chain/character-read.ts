@@ -13,6 +13,7 @@ import type { BlobRef, Character, CharacterRole } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { lazySettle } from '@endless-story/economy';
 import { resolveNetwork } from './network.js';
+import { deriveWorldDay } from './world-day.js';
 import { getMemoryCount } from './memory-counter.js';
 import { settleSagaCohort, snapshotToSurvival } from '../economy/saga-economy.js';
 import { isSuiObjectId } from './ids.js';
@@ -342,12 +343,18 @@ async function fetchNarrativeDay(client: ReturnType<typeof makeSuiClient>): Prom
     try {
         const res = await read.world.getWorld(client, worldId);
         const j = res.json as unknown as {
-            state?: { current_tick?: number | string };
-            time_config?: { days_per_tick_bp?: number | string };
+            state?: { current_tick?: number | string; created_at_ms?: number | string };
+            time_config?: {
+                days_per_tick_bp?: number | string;
+                tick_interval_ms?: number | string;
+            };
         };
-        const tick = Number(j.state?.current_tick ?? 0);
-        const bp = Number(j.time_config?.days_per_tick_bp ?? 1670) || 1670;
-        return Math.floor((tick * bp) / 10_000) + 1;
+        return deriveWorldDay({
+            currentTick: Number(j.state?.current_tick ?? 0),
+            daysPerTickBp: Number(j.time_config?.days_per_tick_bp ?? 1670) || 1670,
+            tickIntervalMs: Number(j.time_config?.tick_interval_ms ?? 0) || undefined,
+            createdAtMs: Number(j.state?.created_at_ms ?? 0) || undefined,
+        });
     } catch {
         return 1;
     }

@@ -16,6 +16,7 @@
 
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from '@/lib/chain/network';
+import { deriveWorldDay } from '@/lib/chain/world-day';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import {
     getLatestSceneLine,
@@ -267,12 +268,18 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
         try {
             const w = await read.world.getWorld(client, worldId);
             const json = w.json as unknown as {
-                state?: { current_tick?: number | string };
-                time_config?: { days_per_tick_bp?: number | string };
+                state?: { current_tick?: number | string; created_at_ms?: number | string };
+                time_config?: {
+                    days_per_tick_bp?: number | string;
+                    tick_interval_ms?: number | string;
+                };
             };
-            const tick = Number(json.state?.current_tick ?? 0);
-            const bp = Number(json.time_config?.days_per_tick_bp ?? 1670) || 1670;
-            day = Math.floor((tick * bp) / 10_000) + 1;
+            day = deriveWorldDay({
+                currentTick: Number(json.state?.current_tick ?? 0),
+                daysPerTickBp: Number(json.time_config?.days_per_tick_bp ?? 1670) || 1670,
+                tickIntervalMs: Number(json.time_config?.tick_interval_ms ?? 0) || undefined,
+                createdAtMs: Number(json.state?.created_at_ms ?? 0) || undefined,
+            });
         } catch {
             /* leave undefined */
         }

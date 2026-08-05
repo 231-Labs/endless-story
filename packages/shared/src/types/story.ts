@@ -12,11 +12,22 @@ export interface StoryWorld {
   name: string;
   description: string;
   currency: { name: string; symbol: string };
-  /** Override for world.move WorldTimeConfig; omit for contract defaults. */
+  /**
+   * Override for world.move WorldTimeConfig; omit for contract defaults.
+   * Only `days_per_tick_bp` + `tick_interval_ms` reach the chain — `mode` /
+   * `year_offset` / `tz_offset_minutes` are off-chain worldview constants that
+   * ride along with the preset's prose (see docs/narrative/WORLD_TIME_MIRROR.md).
+   */
   time_config?: {
     /** Basis points: 1670 ~= 1/6 day per tick. */
     days_per_tick_bp: number;
     tick_interval_ms: number;
+    /** `mirror` = 敘事時刻就是真實時刻（年份減 year_offset）；缺省為 `tick`。 */
+    mode?: 'tick' | 'mirror';
+    /** 敘事年 = 真實年 − year_offset（曆法年，非毫秒差）。春雪社 = 100。 */
+    year_offset?: number;
+    /** 世界民用時區（分鐘）。上海／中原標準時 = 480，無夏令時。 */
+    tz_offset_minutes?: number;
   };
   /** World-tier narrative content shared by every saga; engine craft rules stay in code. */
   narrative?: {

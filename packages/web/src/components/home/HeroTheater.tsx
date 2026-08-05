@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Saga, SceneClip, ClipAspect } from '@endless-story/shared';
+import { formatStoryDate } from '@endless-story/shared/world-clock';
 
 const ASPECT_CLASS: Record<ClipAspect, string> = {
   '16/9': 'aspect-video',
@@ -303,12 +304,14 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
             <h1 className="font-serif text-5xl leading-tight tracking-wide text-ink sm:text-6xl lg:text-7xl">
               {saga.name}
             </h1>
-            {/* Living world-clock: 第 N 日 · 時辰. Drops the meaningless「全 N 日」
-                (endless sagas have no fixed end → totalDays usually unset) and the
-                misleading「0 人在臺」. 全 N 日 only shows for a planned-end arc. */}
+            {/* Living world-clock. 鏡像時間的世界報日期（民國十五年八月五日 · 暮），
+                tick 世界仍報「第 N 日」——這是活時鐘的表面，不是檔案卷宗的日序。
+                Drops the meaningless「全 N 日」(endless sagas have no fixed end →
+                totalDays usually unset) and the misleading「0 人在臺」. 全 N 日 only
+                shows for a planned-end arc. */}
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm tracking-widest text-mute sm:mt-5 sm:text-base">
               <span>
-                第 {saga.currentDay} 日
+                {saga.worldTime?.date ? formatStoryDate(saga.worldTime.date) : `第 ${saga.currentDay} 日`}
                 {saga.worldTime?.partOfDay ? ` · ${DAY_PART_LABEL[saga.worldTime.partOfDay] ?? ''}` : ''}
               </span>
               {castCount > 0 ? <span>· {castCount} 位角色</span> : null}

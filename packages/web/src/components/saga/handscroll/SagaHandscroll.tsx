@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import type { Chapter, Character, Saga, SagaLocation, Scene } from '@endless-story/shared';
+import { formatStoryDate } from '@endless-story/shared/world-clock';
 import { FloatingStream, type StreamLine } from './FloatingQuote';
 import { SceneFan } from './SceneFan';
 import { SceneSheet } from './SceneSheet';
@@ -343,13 +344,24 @@ export function SagaHandscroll(props: Props) {
                 {shownLocationLabel}
               </p>
             </div>
+            {/* 題字。鏡像時間之下日期是主詞、時辰刻是副題；tick 世界維持
+                「時辰刻 / Day N」的舊題法。 */}
             {saga.worldTime ? (
               <div className="shrink-0 text-right font-serif text-2xs tracking-[0.3em] text-mute/85 sm:text-xs">
-                <p>{saga.worldTime.label}</p>
-                <p className="mt-1 text-2xs">
-                  Day {saga.worldTime.day}
-                  {saga.worldTime.partOfDay ? ` · ${dayPartLabel(saga.worldTime.partOfDay)}` : ''}
-                </p>
+                {saga.worldTime.date ? (
+                  <>
+                    <p>{formatStoryDate(saga.worldTime.date)}</p>
+                    {saga.worldTime.label ? <p className="mt-1 text-2xs">{saga.worldTime.label}</p> : null}
+                  </>
+                ) : (
+                  <>
+                    <p>{saga.worldTime.label}</p>
+                    <p className="mt-1 text-2xs">
+                      Day {saga.worldTime.day}
+                      {saga.worldTime.partOfDay ? ` · ${dayPartLabel(saga.worldTime.partOfDay)}` : ''}
+                    </p>
+                  </>
+                )}
               </div>
             ) : null}
           </div>

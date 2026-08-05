@@ -297,7 +297,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         advanced = adv.ok;
     }
     const worldTime = (await getWorldTimeSnapshot()) ?? undefined;
-    const dayLabel = worldTime ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}` : '某日';
+    // 鏡像世界報日期（民國十五年八月五日 · 晡時），tick 世界仍報日序。
+    const dayLabel = worldTime
+        ? worldTime.dateLabel
+            ? `${worldTime.dateLabel} · ${worldTime.partOfDay}`
+            : `第 ${worldTime.day} 日 · ${worldTime.partOfDay}`
+        : '某日';
     tlog(`⏱  ${advanced ? 'advanced → ' : ''}Day ${worldTime?.day ?? '?'} · ${worldTime?.partOfDay ?? '—'}`);
     // isNight must match the Chinese dusk/night labels too — a plain
     // `partOfDay === 'night'` check silently disabled sleep and the spatial router.

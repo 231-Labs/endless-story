@@ -139,3 +139,7 @@ mirror 之下 `storyDayIndex` = 自世界創世（`created_at_ms` 的故事日�
   今日即民國十七年，`year_offset: 98` 是 preset 一行之改。
 - 舊曆（農曆）節慶是戲班世界的靈魂，但需農曆對照表，另案處理
   （見 `WANTS_WITHOUT_MECHANISM.md` 的曆法暫緩條目）。
+- 雙重紀年並存：檔案表面（公報 `committedAtMs`、章回 `createdAt` 等）顯示
+  真實時戳，與敘事日期恰差一百年。這是特性不是缺陷——鏈上時戳是 provenance，
+  敘事日期是小說；顯示準則為「活時鐘用日期、檔案卷宗用日序／真實時戳」。
+  若某表面兩者並列造成混淆，補「西曆／民國」標註即可。
