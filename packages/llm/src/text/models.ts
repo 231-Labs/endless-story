@@ -29,19 +29,19 @@ export interface PoeModel {
 
 export const POE_MODELS: PoeModel[] = [
   // ── Premium ──
-  { id: 'GLM-5.1-FW',       label: 'GLM-5.1 FW',       notes: '中文創作首選；章回 / 導演 / 預覽（Poe primary 預設）',     tier: 'premium', primaryOk: true },
+  { id: 'GLM-5.1-FW',       label: 'GLM-5.1 FW',       notes: '中文創作強；章回 / 導演 / 預覽',                           tier: 'premium', primaryOk: true },
   { id: 'Claude-Opus-4.1',  label: 'Claude Opus 4.1',  notes: '頂級品質、中文出色；最貴',                                 tier: 'premium', primaryOk: true },
   { id: 'Claude-Sonnet-4.6',label: 'Claude Sonnet 4.6',notes: '品質 / 成本平衡，中文強',                                   tier: 'premium', primaryOk: true },
   { id: 'GPT-5',            label: 'GPT-5',            notes: '推理強、中文尚可；風格偏西式',                              tier: 'premium', primaryOk: true },
   { id: 'Gemini-2.5-Pro',   label: 'Gemini 2.5 Pro',   notes: '大 context、中文良好、instruction-following 強',          tier: 'premium', primaryOk: true },
-  { id: 'GLM-4.6',          label: 'GLM-4.6',          notes: '中文母語級、長 context；武俠語境尤佳',                     tier: 'premium', primaryOk: true, cheapOk: true },
+  { id: 'GLM-4.6',          label: 'GLM-4.6',          notes: '中文母語級、長 context；武俠語境尤佳（Poe primary＋cheap 預設）', tier: 'premium', primaryOk: true, cheapOk: true },
 
   // ── Balanced ──
   { id: 'DeepSeek-V3.2',    label: 'DeepSeek V3.2',    notes: '中文強、便宜；風格偏寫實',                                 tier: 'balanced', primaryOk: true, cheapOk: true },
   { id: 'Qwen3-Max',        label: 'Qwen3 Max',        notes: '中文母語級、通用任務穩',                                   tier: 'balanced', primaryOk: true, cheapOk: true },
 
   // ── Cheap ──
-  { id: 'GLM-4.7-N',        label: 'GLM-4.7 N',        notes: '決策 / 審核 / tick 便宜層（Poe cheap 預設）',               tier: 'cheap', cheapOk: true },
+  { id: 'GLM-4.7-N',        label: 'GLM-4.7 N',        notes: '決策 / 審核 / tick 便宜層',                                 tier: 'cheap', cheapOk: true },
   { id: 'GLM-4.7-FlashX',   label: 'GLM-4.7 FlashX',   notes: 'Flash 變體；決策備援',                                     tier: 'cheap', cheapOk: true },
   { id: 'Claude-Haiku-4.5', label: 'Claude Haiku 4.5', notes: '快、便宜；中文尚可',                                       tier: 'cheap', cheapOk: true },
   { id: 'Gemini-2.5-Flash', label: 'Gemini 2.5 Flash', notes: '超低成本、中文尚可',                                       tier: 'cheap', cheapOk: true },
@@ -69,12 +69,16 @@ export const THINKING_MODELS = new Set<string>([
   'claude-opus-4-6',
 ]);
 
-/** Provider-aware fallback chain on 429/503/529. */
+/** Provider-aware fallback chain on 429/503/529.
+ *
+ *  成本紀律：Poe 路徑的 fallback 只在 GLM 家族內——絕不無聲滑向
+ *  Claude / GPT / Gemini（舊鏈第一順位是 Claude-Sonnet，GLM 一限流就
+ *  默默燒最貴的模型；帳單即事故）。要用非 GLM，必須在 POE_MODEL_* 明示。 */
 export function getFallbackModels(provider: 'poe' | 'anthropic', cheap: boolean): string[] {
   if (provider === 'poe') {
     return cheap
-      ? ['GLM-4.6', 'Claude-Haiku-4.5', 'Gemini-2.5-Flash']
-      : ['Claude-Sonnet-4.6', 'GPT-5', 'GLM-4.6'];
+      ? ['GLM-4.6', 'GLM-4.7-FlashX']
+      : ['GLM-4.6', 'GLM-4.7-N'];
   }
   return cheap
     ? ['claude-sonnet-4-6']
