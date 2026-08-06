@@ -448,6 +448,13 @@ export class LabRunManager {
      */
     armIfAlive(runId: string): void {
         const meta = readRunMeta(runId);
+        // 磁碟是 meta 的真相源：卷若已開著，把剛讀的 meta 同步進 in-memory
+        // ActiveRun——否則 driverTick 讀到快取的舊 meta（alive 缺席），掛上
+        // 的 interval 第一巡就自我解除，「活著」永遠按不亮。
+        if (meta) {
+            const open = this.active.get(runId);
+            if (open) open.meta = meta;
+        }
         const shouldRun = meta != null && meta.alive === true && meta.config.timeMode === 'mirror';
         if (!shouldRun) {
             this.disarmAlive(runId);
@@ -459,6 +466,9 @@ export class LabRunManager {
         }, ALIVE_POLL_MS);
         timer.unref?.();
         this.aliveTimers.set(runId, timer);
+        // 掛上就巡一次：按下「活著」的那一刻若有開鑼拍或待答捎話，立即上隊，
+        // 不必空等第一個 45 秒——開關要有開關的手感。
+        void this.driverTick(runId);
     }
 
     /**
@@ -485,11 +495,17 @@ export class LabRunManager {
         const nowMs = Date.now();
         const lastMs = run.lastTickRealMs ?? run.meta.epochRealMs ?? nowMs;
         const crossed = bucketsBetween(lastMs, nowMs, SPRING_SNOW_MIRROR);
+        // 開鑼拍：從未打過拍的卷（currentTick 0）一活起來就為「已經在走的這個
+        // 時辰」補打一拍——否則 lastTickRealMs 種在建卷時刻，同一時辰內按下
+        // 「活著」什麼都不會發生，要空等到下一個邊界（最長近四小時）。fork 卷
+        // 繼承 parent 的 currentTick（>0），不觸發；世界照冷啟動紀律至多一拍。
+        const neverTicked = run.world.data.clock.currentTick === 0;
         let queued = false;
-        if (crossed > 0) {
+        if (crossed > 0 || neverTicked) {
             // 跨了幾個時辰邊界都只補一拍——嚴禁補演（AGENT_WAKE_LAYER §六之五）；
-            // 跨了幾界只記進這一拍的 skippedBuckets，供 UI「歇了 N 拍」一行。
-            run.pendingSkippedBuckets = crossed;
+            // 跨了幾界只記進這一拍的 skippedBuckets，供 UI「歇了 N 拍」一行
+            // （開鑼拍 crossed 為 0 就不記）。
+            if (crossed > 0) run.pendingSkippedBuckets = crossed;
             run.pendingTicks += 1;
             queued = true;
         }
