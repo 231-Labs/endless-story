@@ -303,10 +303,58 @@ P2 = 起念 + 輕量 activity + 台柱/班底 tier。核心化約：**起念就�
 - live snapshot 帶 `activityByChar` 在期項；捎話下拉的角色名後綴當前
   activity（「柳安春（排戲中）」）。
 
-## 附錄 C、P1b 實作規格（鏈側接線）
+## 附錄 C、P1b 實作規格（鏈側接線，定稿）
 
-（依偵察後定稿——原則不變：機制在 engine，鏈側只做受權入口、三源映射
-與排程；enactChain 單寫者；所有演繹落款真實毫秒。）
+偵察結論：生產側**沒有** engine WorldState（tick-loop 由鏈讀＋檔案店逐拍
+重建），但 `RunnerSceneAgent`（含 per-character 持久 session）已在 tick-loop
+建構、`interlude` 座席現成；記憶走 `rememberForCharacter`。據此：
+
+### C1 引擎微調（機制不動，型別收窄）
+
+`runInterludes` 的參數型別由 `WorldState` class 收窄為結構化最小介面
+`InterludeWorld`（`data` 的窄 Pick ＋ `castById()`）——class 結構相容，
+lab 零改動；鏈側以 duck-typed shim 滿足之，機制仍住在 engine（鐵律）。
+
+### C2 鏈側 wake store（house style 單寫者檔案店）
+
+`web/data/wake-store.json`：`{ pendingStimuli, interludeLedger,
+interludesSinceLastTick, pendingIntents }` —— 與 want-ledger 等同一紀律，
+唯一寫者是 enactChain 上的演繹。折子紀錄另 append `web/data/interludes.jsonl`。
+
+### C3 `/api/wake` 與 enactChain
+
+- `tickChain` 抽成共用模組（`lib/server/enact-chain.ts`），改名
+  **enactChain**；`/api/tick` 與新 `/api/wake` 同鏈排隊（折子撞上進行中
+  的大拍即等它）。
+- `/api/wake`（POST，`TICK_LOOP_SECRET` 受權，照 showrunner route 模板）：
+  body 可帶 `enqueue: { characterId, kind, text }`（外部系統的入口——
+  **這就是鏈事件 seam**：indexer/webhook 日後直接 POST 即可）及／或
+  `drain: true`（巡佇列：collectDueIntents → runInterludes）。
+- 演繹組裝：clock/dateLabel 取 `getWorldTimeSnapshot()`；castById 由
+  roster＋`c.description`（與 tick-loop 餵 session 的 persona 同源，
+  canon-hash 穩定）；RecallPort shim = `rememberForCharacter` 一層皮
+  （`recall()` 不被折子路徑呼叫）。
+
+### C4 兩個真源（注夢除外）
+
+- **東家留言**：Composer 送出成功後同步 enqueue wake stimulus
+  （kind 'note'）——「下一個 tick 就會聽見」自此變成「幾分鐘內」。
+- **鏈上事件**：經 C3 的 `enqueue` 入口（本期不接 indexer 輪詢，seam 已真）。
+- **注夢刻意不映射**：夢的本義是深宵入枕（`dream.ts` 自有通道與時序），
+  即時喚醒違背夢的設計。
+
+### C5 大拍聽說幕間（生產側）
+
+tick-loop 於 perceive/組 context 處 drain wake store 的
+`interludesSinceLastTick` ＋ 滯留 stimuli → 涉事角色各一行世情
+（複用引擎 `drainInterludePercepts` 的文案形制），入本人 prompt context
+後清空——與 lab 同語義：聽說，不重演。
+
+### C6 排程
+
+world-loop 的 `sleepToNextBeat` 內每 ~2 分鐘 POST `/api/wake {drain:true}`
+（兩個呼叫點——正常與 paused 分支——一併覆蓋；照 `runShowrunnerBeat`
+的容錯 fetch 模板）。legacy interval 模式同樣受惠。
 
 ## 八之二、外部提案評審記錄（婉拒清單）
 
