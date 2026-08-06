@@ -253,6 +253,61 @@ adapters：`FakeSceneAgent.interlude` 確定性實作（零鑰零費）；
 起念 timer（P2）、台柱/班底 tier 欄位（P2——P1 全員可被戳）、
 鏈側接線（P1b）、presence 面板進階版、天光日出。
 
+## 附錄 B、P2 實作規格（定稿）
+
+P2 = 起念 + 輕量 activity + 台柱/班底 tier。核心化約：**起念就是自己捎話給
+未來的自己**——一枚定時的 stimulus，到點入佇列，走折子全套既有閘門
+（預算、單寫者、落款、拍首兜底），不另造第二套機制。
+
+### B1 台柱與班底
+
+- cast 成員加 `agency?: 'principal' | 'ensemble'`（**缺席 = 'ensemble'**：
+  惰性是預設，台柱要點名——成本安全）。preset `founding_cast` 同名欄位透傳。
+- spring-snow 公開種子：開山三人皆 `principal`（初期 2–4 人之數）；
+  後進／班底自然落 ensemble。
+- P2 的 tier 只閘一件事：**起念**（followUp）僅台柱可立；被動折子（被捎話）
+  全員照舊。
+
+### B2 起念（intent）
+
+- `InterludeReply.followUp?: { inMinutes: number; note: string }` —— 座席在
+  折子裡替自己記一樁「稍後要做的事」。引擎驗證：僅 principal；`inMinutes`
+  夾 [15, 1440]；`note` ≤ 40 字；**每人至多一枚在途**（新的換舊的——人會
+  改主意）。存 `WorldData.pendingIntents?: Array<{ id, characterId,
+  dueRealMs, note }>`，id 確定性構造。
+- 到點轉刺激：`kind: 'intent'`、`text = note`、`atRealMs = dueRealMs`。
+  `InterludeStimulus.kind` 聯集加 `'intent'`。
+- **intent 免 debounce**：整組皆 intent 的折子立即 due——debounce 是為合併
+  外來連戳而設，起念本來就是排程過的一件事；混組（intent＋外來捎話）走
+  一般規則。預算照計（計入本人當日折子上限，防自我 DDoS）。
+- 純函數對：`hasDueIntent(w, nowMs)`（peek，driver 判 due 用，不改狀態）／
+  `collectDueIntents(w, nowMs)`（取出到期者轉刺激，**只在序列化 job 內呼**）。
+- 座席呈現：'intent' 在 prompt 讀作「你先前起的念，此刻到了」；percept 的
+  voiceOf 讀作「先前起的念」。
+
+### B3 輕量 activity（明示覆寫節律）
+
+- `InterludeReply.activity?: { what: string; forMinutes?: number }` ——
+  夾 `what` ≤ 20 字、`forMinutes` [10, 360] 預設 60。存
+  `WorldData.activityByChar?: Record<charId, { what, startRealMs, endRealMs }>`。
+- 提示合成在引擎內：在期 activity > 呼叫端 `activityHint`（節律）——
+  「activity 是 agent 明示的覆寫，節律是零 LLM 的預設行程」（§六之四）。
+- 不限 tier（班底被捎話時也可自陳在做什麼）。過期自然失效，不另清。
+- 完整的日程/scheduled_events 引擎**不在 P2**（見 §六之四 全版，另案）。
+
+### B4 lab 接線
+
+- driver 巡佇列的 due 判定加 `hasDueIntent`（peek）；佇列化後由序列化的
+  折子 job 先 `collectDueIntents` 再 `runInterludes`——**狀態變更只發生在
+  單寫者隊內**。
+- live snapshot 帶 `activityByChar` 在期項；捎話下拉的角色名後綴當前
+  activity（「柳安春（排戲中）」）。
+
+## 附錄 C、P1b 實作規格（鏈側接線）
+
+（依偵察後定稿——原則不變：機制在 engine，鏈側只做受權入口、三源映射
+與排程；enactChain 單寫者；所有演繹落款真實毫秒。）
+
 ## 八之二、外部提案評審記錄（婉拒清單）
 
 一份外部設計說明與本設計方向收斂（時間連續、事件喚醒、拒絕 1440 tick、
