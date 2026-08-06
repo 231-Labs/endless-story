@@ -13,15 +13,37 @@
  *   · debounce —— 同一人窗內的捎話合併成一次折子（讀者連戳十下 = 一次演繹聽見十句）。
  *   · 預算 —— 每人每日上限；超出者留在佇列，退化為下一個大拍聽見（即今日行為）。
  * 由此得到關鍵的優雅退化性質：**預算設 0 ≡ 完全等於現制**，關掉即回到六拍世界。
+ *
+ * P2 起念（intent）就化約在同一套機制裡：**自己捎話給未來的自己**——台柱在折子裡
+ * 立一枚定時的念（`InterludeReply.followUp`），到點由 `collectDueIntents` 轉成一則
+ * `kind: 'intent'` 的刺激入佇列，此後與東家的留言走同一條路（同樣的分組、同樣的
+ * 預算、同樣的落款、同樣的拍首兜底）。沒有第二套佇列，沒有第二套閘門。
  */
 
 import type { InterludeInput, InterludeStimulus, PartOfDay, RecallPort, SceneAgentPort } from './ports.ts';
-import type { WorldState } from './world-state.ts';
+import type { CastMember, WorldState, WorldStateData } from './world-state.ts';
 
 /** 合併窗預設一分鐘：戳完到聽見的體感是「幾十秒」，不是「幾秒」也不是「下一拍」。 */
 export const DEFAULT_INTERLUDE_DEBOUNCE_MS = 60_000;
 /** 每人每日折子預設上限（設計建議 4–6）。0 = 關閉喚醒層。 */
 export const DEFAULT_INTERLUDE_DAILY_BUDGET = 6;
+
+// ── 起念與活動的夾限 (P2) ────────────────────────────────────────────────────
+// 座席不必自律：以下全部由本模組執行，一個越界的回答只會被夾回範圍或逕行忽略。
+
+/** 起念最短 15 分鐘：再近就成了「自我 DDoS」——agent 每五分鐘排一次自檢，
+ *  預算再大也扛不住（設計稿 §六之四）。 */
+const INTENT_MIN_MINUTES = 15;
+/** 起念最長一晝夜：更遠的事是 want 的 dueDay 該管的，不是一枚 timer。 */
+const INTENT_MAX_MINUTES = 1440;
+/** 起念的一句話 ≤ 40 字：它是捎給未來自己的一句提醒，不是一份計畫書。 */
+const INTENT_NOTE_LIMIT = 40;
+/** 活動名 ≤ 20 字：「在戲台上排《牡丹亭》」這樣一句，不是一段敘述。 */
+const ACTIVITY_WHAT_LIMIT = 20;
+const ACTIVITY_MIN_MINUTES = 10;
+const ACTIVITY_MAX_MINUTES = 360;
+/** 沒說要做多久就當一個時辰上下——與世界的六拍節律同一個數量級。 */
+const ACTIVITY_DEFAULT_MINUTES = 60;
 
 /** percept 摘要的節制長度——大拍只是「聽說」幕間，不該被幕間的原文淹掉。 */
 const STIMULUS_CLIP = 24;
@@ -94,13 +116,24 @@ export async function runInterludes(
     for (const [characterId, stimuli] of byChar) {
         const member = world.castById(characterId);
         if (!member) continue; // 查無此人：留在佇列，由拍首的 drain 一併清出
-        const oldestMs = stimuli.reduce((oldest, s) => Math.min(oldest, s.atRealMs), Infinity);
-        if (opts.nowMs - oldestMs < debounceMs) continue; // 未滿齡：讓後續的話併進來
+        // 起念免 debounce：debounce 是為**合併外來連戳**而設（讀者連戳十下 = 一次演繹
+        // 聽見十句），起念本來就是排程過的一件事——到點即是此刻，沒有東西還要等它併
+        // 進來。整組皆 'intent' 才免；混組（起念撞上外來捎話）走一般規則，讓那句剛到
+        // 的話有機會併進同一折，而不是逼出兩次演繹。
+        if (!stimuli.every((s) => s.kind === 'intent')) {
+            const oldestMs = stimuli.reduce((oldest, s) => Math.min(oldest, s.atRealMs), Infinity);
+            if (opts.nowMs - oldestMs < debounceMs) continue; // 未滿齡：讓後續的話併進來
+        }
         const entry = w.interludeLedger?.[characterId];
         const spent = entry && entry.day === clock.day ? entry.count : 0; // day 一變即歸零
-        if (spent >= dailyBudget) continue; // 超預算：留給下一個大拍
+        if (spent >= dailyBudget) continue; // 超預算：留給下一個大拍（起念照計，防自我 DDoS）
 
-        const activityHint = opts.activityHint?.(characterId);
+        // 在期的自陳活動壓過呼叫端的節律提示——activity 是 agent 明示的覆寫，節律只是
+        // 零 LLM 的預設行程（設計稿 §六之四）。過了鐘點的活動視同不存在，不必清表。
+        const live = w.activityByChar?.[characterId];
+        const activityHint = live && live.endRealMs > opts.nowMs
+            ? `你正在：${live.what}`
+            : opts.activityHint?.(characterId);
         let reply;
         try {
             const input: InterludeInput = {
@@ -123,10 +156,13 @@ export async function runInterludes(
         (w.interludeLedger ??= {})[characterId] = { day: clock.day, count: spent + 1 };
         for (const stimulus of stimuli) consumed.add(stimulus.id);
         const memoryNote = reply?.memoryNote?.trim();
+        // 折子的落款 id（設計稿 §三）：日、時辰序、真實毫秒，再綴角色——
+        // 同一毫秒兩個人各自被戳也不會撞號。確定性，重播可復現。
+        const recordId = `${w.sagaId}:d${clock.day}:b${clock.tickOfDay}:w${opts.nowMs}:${characterId}`;
+        applyFollowUp(w, member, reply?.followUp, opts.nowMs, recordId);
+        applyActivity(w, characterId, reply?.activity, opts.nowMs);
         const record: InterludeRecord = {
-            // 折子的落款 id（設計稿 §三）：日、時辰序、真實毫秒，再綴角色——
-            // 同一毫秒兩個人各自被戳也不會撞號。確定性，重播可復現。
-            id: `${w.sagaId}:d${clock.day}:b${clock.tickOfDay}:w${opts.nowMs}:${characterId}`,
+            id: recordId,
             characterId,
             name: member.name,
             stimuli: [...stimuli],
@@ -147,6 +183,90 @@ export async function runInterludes(
 
     if (consumed.size) w.pendingStimuli = queue.filter((stimulus) => !consumed.has(stimulus.id));
     return played;
+}
+
+/**
+ * 起念落帳 —— 把座席替自己記下的「稍後要辦的事」存成一枚在途的 intent。
+ *
+ * 這是 P2 的 tier 唯一閘住的一件事：**只有台柱能自己給自己安排未來**。班底的
+ * followUp 逕行忽略（不是錯誤，是「這個人不起念」——惰性是預設，見 §六之二），
+ * 被動折子照舊全員都有。越界的分鐘數夾回範圍、超長的話截短、非數逕行忽略——
+ * 座席不必自律。**每人至多一枚在途**：新的換舊的，人會改主意。
+ */
+function applyFollowUp(
+    w: WorldStateData,
+    member: CastMember,
+    followUp: { inMinutes: number; note: string } | undefined,
+    nowMs: number,
+    recordId: string,
+): void {
+    if (!followUp || member.agency !== 'principal') return;
+    const note = typeof followUp.note === 'string' ? followUp.note.trim().slice(0, INTENT_NOTE_LIMIT) : '';
+    if (!note || !Number.isFinite(followUp.inMinutes)) return;
+    const minutes = clampNumber(Math.round(followUp.inMinutes), INTENT_MIN_MINUTES, INTENT_MAX_MINUTES);
+    const kept = (w.pendingIntents ?? []).filter((intent) => intent.characterId !== member.id);
+    // id 由這一折的落款 id 派生：同一次演繹只可能立一枚念，確定性、重播可復現。
+    kept.push({ id: `${recordId}:intent`, characterId: member.id, dueRealMs: nowMs + minutes * 60_000, note });
+    w.pendingIntents = kept;
+}
+
+/** 活動落帳 —— agent 自陳「我此刻正做著一件要花時間的事」。不限 tier：班底被捎話時
+ *  也可以自陳在做什麼（那正是「有位置、有姿態」的班底該有的樣子）。 */
+function applyActivity(
+    w: WorldStateData,
+    characterId: string,
+    activity: { what: string; forMinutes?: number } | undefined,
+    nowMs: number,
+): void {
+    if (!activity) return;
+    const what = typeof activity.what === 'string' ? activity.what.trim().slice(0, ACTIVITY_WHAT_LIMIT) : '';
+    if (!what) return;
+    const asked = activity.forMinutes;
+    const minutes = Number.isFinite(asked)
+        ? clampNumber(Math.round(asked as number), ACTIVITY_MIN_MINUTES, ACTIVITY_MAX_MINUTES)
+        : ACTIVITY_DEFAULT_MINUTES;
+    (w.activityByChar ??= {})[characterId] = { what, startRealMs: nowMs, endRealMs: nowMs + minutes * 60_000 };
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * 有沒有到期的起念？——**peek，絕不改狀態**。
+ *
+ * 給驅動端判 due 用（lab driver 每巡一次問一句「該排一次折子 job 了嗎」）。因為
+ * 它不寫東西，可以在單寫者隊**之外**安全地呼；真正的取用是 `collectDueIntents`
+ * 的事，那個只能在隊內呼。
+ */
+export function hasDueIntent(world: WorldState, nowMs: number): boolean {
+    return (world.data.pendingIntents ?? []).some((intent) => intent.dueRealMs <= nowMs);
+}
+
+/**
+ * 取出到期的起念，轉成刺激 —— **會改狀態，只在序列化的 job 內呼**（單寫者鐵律）。
+ *
+ * 起念就是自己捎話給未來的自己：到點它變成一則與東家留言、街面上一句話**同形**的
+ * 刺激，之後走的是折子那一套既有閘門（分組、預算、落款、拍首兜底），沒有第二套機制。
+ * 本函式只負責「取出並轉形」——**呼叫端負責把回傳的刺激 push 進
+ * `w.pendingStimuli`**，因為要不要入佇列、何時入，是那條寫者隊的事，不是這裡的。
+ */
+export function collectDueIntents(world: WorldState, nowMs: number): InterludeStimulus[] {
+    const w = world.data;
+    const queue = w.pendingIntents;
+    if (!queue?.length) return [];
+    const due = queue.filter((intent) => intent.dueRealMs <= nowMs);
+    if (!due.length) return []; // 一枚也沒到期：連寫都不寫，佇列原封（陣列引用不換）
+    w.pendingIntents = queue.filter((intent) => intent.dueRealMs > nowMs);
+    return due.map((intent) => ({
+        id: intent.id,
+        characterId: intent.characterId,
+        kind: 'intent' as const,
+        // 落款用「當初排定的時刻」而非此刻：起念的齡從它該響的那一刻算起，
+        // 巡佇列晚了幾十秒不該讓它顯得比實際年輕。
+        text: intent.note,
+        atRealMs: intent.dueRealMs,
+    }));
 }
 
 /**
@@ -191,8 +311,10 @@ export function drainInterludePercepts(world: WorldState): Record<string, string
     return percepts;
 }
 
-/** 捎話的來路：留言是東家的話，戳世界是街面上不知哪來的一句。 */
+/** 捎話的來路：留言是東家的話，戳世界是街面上不知哪來的一句，
+ *  起念則是這個人自己——先前捎給此刻的一句話。 */
 function voiceOf(stimulus: InterludeStimulus): string {
+    if (stimulus.kind === 'intent') return '先前起的念';
     return stimulus.kind === 'note' ? '東家' : '外頭有人';
 }
 

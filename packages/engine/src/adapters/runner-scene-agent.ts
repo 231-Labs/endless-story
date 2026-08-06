@@ -76,6 +76,37 @@ export interface RunnerSceneAgentOptions {
     sessionKey?: string;
 }
 
+/** 折子回話裡的起念（P2）—— 讀出來、截短，形狀不對就當沒說。真正的夾限（僅台柱、
+ *  分鐘數 [15,1440]、每人一枚在途）在引擎的 `runInterludes` 裡，這裡只求不把垃圾
+ *  遞進去：座席的職責是說話，不是守規矩。 */
+function readFollowUp(raw: unknown): Pick<InterludeReply, 'followUp'> | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const { inMinutes, note } = raw as { inMinutes?: unknown; note?: unknown };
+    const text = typeof note === 'string' ? toTraditional(note.trim()).slice(0, 40) : '';
+    const minutes = readNumber(inMinutes);
+    if (!text || !Number.isFinite(minutes)) return null;
+    return { followUp: { inMinutes: Math.round(minutes), note: text } };
+}
+
+/** 折子回話裡的自陳活動（P2）—— 同上：讀出來、截短，`forMinutes` 說不清就省略，
+ *  讓引擎套它的預設（一個時辰）。 */
+function readActivity(raw: unknown): Pick<InterludeReply, 'activity'> | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const { what, forMinutes } = raw as { what?: unknown; forMinutes?: unknown };
+    const text = typeof what === 'string' ? toTraditional(what.trim()).slice(0, 20) : '';
+    if (!text) return null;
+    const minutes = readNumber(forMinutes);
+    return { activity: { what: text, ...(Number.isFinite(minutes) ? { forMinutes: Math.round(minutes) } : {}) } };
+}
+
+/** 數字或說得清的數字字串才算數——null/布林/物件一律 NaN（`Number(null)` 是 0，
+ *  那個 0 會被引擎夾成十分鐘的活動，等於憑空替角色安排了一樁事）。 */
+function readNumber(raw: unknown): number {
+    if (typeof raw === 'number') return raw;
+    if (typeof raw === 'string' && raw.trim()) return Number(raw);
+    return Number.NaN;
+}
+
 export class RunnerSceneAgent implements SceneAgentPort {
     private readonly sessions?: PersistentCharacterSessions;
     private dossierClient?: ReturnType<typeof llmText.createTextClient>;
@@ -1038,11 +1069,19 @@ export class RunnerSceneAgent implements SceneAgentPort {
      * 下一個大拍。
      */
     async interlude(input: InterludeInput): Promise<InterludeReply | null> {
-        const said = input.stimuli
-            .filter((stimulus) => stimulus.text.trim())
-            .map((stimulus) => `- ${stimulus.kind === 'note' ? '東家捎話' : '外頭有人捎話'}：「${stimulus.text.trim()}」`)
+        const heard = input.stimuli.filter((stimulus) => stimulus.text.trim());
+        // 起念（P2）不是外頭遞來的話，是這個人自己先前捎給此刻的一句——說法上分得開，
+        // 機制上不分家（同一個佇列、同一套閘門）。
+        const said = heard
+            .map((stimulus) =>
+                stimulus.kind === 'intent'
+                    ? `- 你先前起的念，此刻到了：「${stimulus.text.trim()}」`
+                    : `- ${stimulus.kind === 'note' ? '東家捎話' : '外頭有人捎話'}：「${stimulus.text.trim()}」`,
+            )
             .join('\n');
         if (!said) return null;
+        // 整組皆起念的一折，沒有人在跟前說話——別讓提示詞硬說「有話遞到你跟前」。
+        const onlyIntent = heard.every((stimulus) => stimulus.kind === 'intent');
         // 鏡像卷有日期就報日期（民國十五年八月五日 晡時），排演卷只有第幾日。
         const when = input.dateLabel
             ? `${input.dateLabel} ${input.clock.partOfDay}`
@@ -1050,14 +1089,17 @@ export class RunnerSceneAgent implements SceneAgentPort {
         const percept = [
             '【幕間·你此刻不在場上】',
             `${when}。${input.activityHint ? `你此刻本該在：${input.activityHint}。` : ''}`,
-            '有話遞到你跟前：',
+            onlyIntent ? '你心裡自己記著的一樁事，時候到了：' : '有話遞到你跟前：',
             said,
             '',
             '你聽見了。回一句你此刻真會說、真會做的——民國年間戲班子裡的人怎麼說話，你就怎麼說；',
             '不許現代腔、不許洋詞、不許旁白解釋。就這一句（≤40字，可帶一個小動作）：',
             '不開場面、不拉旁人進戲、不替不在跟前的人拿主意。',
             '若這句話在你心裡留下了什麼，另記一筆心事（≤30字，第一人稱）；沒有就省略。',
-            '嚴格只輸出 JSON：{"response":"…","memoryNote":"…可省略…"}，不要 markdown、不要多餘文字。',
+            '若此刻起了一樁稍後要辦的念，記 {"inMinutes":分鐘,"note":"…"}；沒有就省略。',
+            '若你此刻正做著一件要花時間的事，記 {"what":"…","forMinutes":分鐘}；沒有就省略。',
+            '嚴格只輸出 JSON：{"response":"…","memoryNote":"…可省略…","followUp":{…可省略…},"activity":{…可省略…}}，',
+            '不要 markdown、不要多餘文字。',
         ].join('\n');
 
         const identity = this.identity({
@@ -1085,11 +1127,21 @@ export class RunnerSceneAgent implements SceneAgentPort {
                 });
                 raw = res.text;
             }
-            const obj = extractRewriteJson(raw) as { response?: unknown; memoryNote?: unknown } | null;
+            const obj = extractRewriteJson(raw) as {
+                response?: unknown;
+                memoryNote?: unknown;
+                followUp?: unknown;
+                activity?: unknown;
+            } | null;
             const response = typeof obj?.response === 'string' ? toTraditional(obj.response.trim()).slice(0, 60) : '';
             if (!response) return null;
             const note = typeof obj?.memoryNote === 'string' ? obj.memoryNote.trim() : '';
-            return { response, ...(note ? { memoryNote: toTraditional(note).slice(0, 30) } : {}) };
+            return {
+                response,
+                ...(note ? { memoryNote: toTraditional(note).slice(0, 30) } : {}),
+                ...(readFollowUp(obj?.followUp) ?? {}),
+                ...(readActivity(obj?.activity) ?? {}),
+            };
         } catch {
             return null; // 幕間沒答上不是事故：這樁捎話留給大拍
         }

@@ -11,7 +11,7 @@ import test from 'node:test';
 import { FakeSceneAgent } from '../src/adapters/local/fake-scene-agent.ts';
 import { LocalClock, makeClock } from '../src/adapters/local/clock.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
-import { runInterludes, type InterludeRecord } from '../src/interlude.ts';
+import { collectDueIntents, hasDueIntent, runInterludes, type InterludeRecord } from '../src/interlude.ts';
 import { runTick } from '../src/tick.ts';
 import { WorldState, type WorldStateData } from '../src/world-state.ts';
 import { newWant } from '../src/core/want-core.ts';
@@ -49,6 +49,19 @@ class SpyRecall implements RecallPort {
 class TerseAgent extends FakeSceneAgent {
     override async interlude(input: InterludeInput): Promise<InterludeReply | null> {
         return { response: `${input.name}應了一聲。` };
+    }
+}
+
+/** 照單回話的座席——回什麼由測試指定。用它把「座席自律」與「引擎驗證」分開：
+ *  座席愛說什麼都行（一萬分鐘、四十字的念、班底起念），夾限是引擎的事。 */
+class ScriptedAgent extends FakeSceneAgent {
+    readonly scripted: InterludeReply;
+    constructor(scripted: InterludeReply) {
+        super();
+        this.scripted = scripted;
+    }
+    override async interlude(): Promise<InterludeReply | null> {
+        return this.scripted;
     }
 }
 
@@ -93,6 +106,13 @@ function makeWorld(over: Partial<WorldStateData> = {}): WorldState {
         objects: [],
     };
     return new WorldState({ ...base, ...over });
+}
+
+/** 甲點名為台柱、乙留作班底——起念只有台柱有份（惰性是預設，設計稿 §六之二）。 */
+function makeTieredWorld(over: Partial<WorldStateData> = {}): WorldState {
+    const world = makeWorld(over);
+    world.data.cast[0].agency = 'principal';
+    return world;
 }
 
 test('debounce：未滿齡的捎話不消化，滿齡則同一人多則合併為一次折子', async () => {
@@ -249,4 +269,203 @@ test('喚醒層沒開：兩個佇列皆空，大拍完全不受影響', async ()
     await runTick(world, { agent, recall: new LocalRecall(), archive: nullArchive, clock: new LocalClock() }, { log: () => {} });
     assert.equal(world.data.pendingStimuli, undefined, '沒有幕間就不生欄位（舊卷 byte-identical）');
     assert.equal(world.data.interludesSinceLastTick, undefined);
+});
+
+// ── 起念（P2）—— 自己捎話給未來的自己 ────────────────────────────────────────
+// 一枚定時的刺激，到點入佇列，走折子全套既有閘門。以下驗的正是「沒有第二套機制」。
+
+test('起念免 debounce：整組皆起念立刻成局，混進一句外來捎話就照一般規則等窗滿齡', async () => {
+    const agent = new FakeSceneAgent();
+    // 起念本來就是排程過的一件事——到點即是此刻，沒有東西還要等它併進來。
+    const solo = makeWorld({
+        pendingStimuli: [stimulus({ id: 'i-1', characterId: 'c0', kind: 'intent', text: '黃昏去茶樓堵他', atRealMs: T0 })],
+    });
+    const now = await runInterludes(solo, { agent, recall: new SpyRecall() }, { nowMs: T0 });
+    assert.equal(now.length, 1, '齡 0 也演——debounce 是為外來連戳而設，不是為起念');
+    assert.deepEqual(solo.data.pendingStimuli, []);
+
+    // 混組：起念撞上一句剛到的外來捎話 → 走一般規則，讓那句話有機會併進同一折，
+    // 而不是逼出兩次演繹。
+    const mixed = makeWorld({
+        pendingStimuli: [
+            stimulus({ id: 'i-2', characterId: 'c0', kind: 'intent', text: '黃昏去茶樓堵他', atRealMs: T0 }),
+            stimulus({ id: 's-2', characterId: 'c0', kind: 'note', text: '東家問你今晚的戲', atRealMs: T0 }),
+        ],
+    });
+    const early = await runInterludes(mixed, { agent, recall: new SpyRecall() }, { nowMs: T0 + 10_000 });
+    assert.equal(early.length, 0, '混組不免 debounce');
+    assert.equal(mixed.data.pendingStimuli?.length, 2, '兩則原封留在佇列');
+    const later = await runInterludes(mixed, { agent, recall: new SpyRecall() }, { nowMs: T0 + 61_000 });
+    assert.equal(later.length, 1);
+    assert.equal(later[0].stimuli.length, 2, '窗滿齡後併成一折');
+});
+
+test('起念只有台柱能立：班底的 followUp 逕行忽略', async () => {
+    const agent = new ScriptedAgent({ response: '應了一聲', followUp: { inMinutes: 60, note: '入夜去尋她' } });
+    const world = makeTieredWorld({
+        pendingStimuli: [
+            stimulus({ id: 's-1', characterId: 'c0', atRealMs: T0 }), // 甲：台柱
+            stimulus({ id: 's-2', characterId: 'c1', atRealMs: T0 }), // 乙：班底
+        ],
+    });
+    const played = await runInterludes(world, { agent, recall: new SpyRecall() }, { nowMs: T0 + 2 * MIN });
+    assert.equal(played.length, 2, '被捎話全員照舊有折子——tier 閘的只有起念');
+    assert.deepEqual(
+        (world.data.pendingIntents ?? []).map((i) => i.characterId),
+        ['c0'],
+        '班底不起念（缺席 = ensemble，惰性是預設）',
+    );
+    assert.equal(world.data.pendingIntents?.[0].dueRealMs, T0 + 2 * MIN + 60 * MIN);
+    assert.equal(world.data.pendingIntents?.[0].note, '入夜去尋她');
+});
+
+test('起念的夾限：分鐘數夾 [15,1440]、話截 40 字、非數逕行忽略', async () => {
+    /** 讓台柱在一折裡立下這麼一枚念，回傳落帳後的在途清單。 */
+    const stake = async (followUp: { inMinutes: number; note: string }) => {
+        const world = makeTieredWorld({ pendingStimuli: [stimulus({ id: 's-1', characterId: 'c0', atRealMs: T0 })] });
+        await runInterludes(
+            world,
+            { agent: new ScriptedAgent({ response: '應了一聲', followUp }), recall: new SpyRecall() },
+            { nowMs: T0 + 2 * MIN },
+        );
+        return world.data.pendingIntents ?? [];
+    };
+    const base = T0 + 2 * MIN;
+
+    assert.equal((await stake({ inMinutes: 1, note: '這就去' }))[0].dueRealMs, base + 15 * MIN, '太近夾到 15 分鐘');
+    assert.equal((await stake({ inMinutes: 99_999, note: '總有一日' }))[0].dueRealMs, base + 1440 * MIN, '太遠夾到一晝夜');
+    assert.equal((await stake({ inMinutes: 30, note: '好' }))[0].dueRealMs, base + 30 * MIN, '範圍內原封不動');
+
+    const long = await stake({ inMinutes: 30, note: '一'.repeat(80) });
+    assert.equal(long[0].note.length, 40, '捎給未來自己的是一句提醒，不是一份計畫書');
+
+    assert.deepEqual(await stake({ inMinutes: Number.NaN, note: '說不清什麼時候' }), [], '非數逕行忽略');
+    assert.deepEqual(await stake({ inMinutes: 30, note: '   ' }), [], '沒話就沒有念');
+});
+
+test('每人至多一枚在途：新的念換掉舊的（人會改主意），旁人的不受牽連', async () => {
+    const world = makeTieredWorld({
+        pendingStimuli: [stimulus({ id: 's-1', characterId: 'c0', atRealMs: T0 })],
+        // 乙先前也有一枚在途——換的是同一個人的念，不是整張表。
+        pendingIntents: [{ id: 'old-c1', characterId: 'c1', dueRealMs: T0 + 300 * MIN, note: '乙的舊念' }],
+    });
+    const recall = new SpyRecall();
+    await runInterludes(
+        world,
+        { agent: new ScriptedAgent({ response: '應一聲', followUp: { inMinutes: 30, note: '先去尋師姐' } }), recall },
+        { nowMs: T0 + 2 * MIN },
+    );
+    world.data.pendingStimuli = [stimulus({ id: 's-2', characterId: 'c0', atRealMs: T0 + 10 * MIN })];
+    await runInterludes(
+        world,
+        { agent: new ScriptedAgent({ response: '又應一聲', followUp: { inMinutes: 45, note: '改主意，先回戲園' } }), recall },
+        { nowMs: T0 + 12 * MIN },
+    );
+
+    const intents = world.data.pendingIntents ?? [];
+    assert.equal(intents.filter((i) => i.characterId === 'c0').length, 1, '甲身上至多一枚在途');
+    assert.equal(intents.find((i) => i.characterId === 'c0')?.note, '改主意，先回戲園', '新的換掉舊的');
+    assert.equal(intents.find((i) => i.characterId === 'c1')?.note, '乙的舊念', '乙的念不受牽連');
+});
+
+test('起念取用：hasDueIntent 只 peek，collectDueIntents 只取到期者並轉成刺激', () => {
+    const world = makeWorld();
+    world.data.pendingIntents = [
+        { id: 'i-due', characterId: 'c0', dueRealMs: T0, note: '去茶樓堵他' },
+        { id: 'i-later', characterId: 'c1', dueRealMs: T0 + 60 * MIN, note: '明早再說' },
+    ];
+
+    assert.equal(hasDueIntent(world, T0 - 1), false, '還沒到點');
+    assert.equal(hasDueIntent(world, T0), true, '到點了');
+    assert.equal(world.data.pendingIntents.length, 2, 'peek 絕不改狀態（driver 在單寫者隊外呼它）');
+
+    const due = collectDueIntents(world, T0 + MIN);
+    assert.deepEqual(due, [
+        // 落款用「當初排定的時刻」而非此刻：巡佇列晚了幾十秒不該讓這枚念顯得年輕。
+        { id: 'i-due', characterId: 'c0', kind: 'intent', text: '去茶樓堵他', atRealMs: T0 },
+    ]);
+    assert.deepEqual(world.data.pendingIntents.map((i) => i.id), ['i-later'], '未到期者原封留著');
+    assert.deepEqual(collectDueIntents(world, T0 + MIN), [], '一枚也沒到期就什麼都不取');
+    assert.deepEqual(collectDueIntents(makeWorld(), T0), [], '從沒起過念的世界也走得通');
+});
+
+// ── 輕量 activity（P2）—— 拍與拍之間的存在形狀 ──────────────────────────────
+
+test('自陳活動：what 截 20 字、forMinutes 夾 [10,360] 預設 60，起訖落在演繹當下', async () => {
+    /** 讓某人在一折裡自陳這麼一樁活動，回傳落帳後的那一筆。 */
+    const doing = async (activity: { what: string; forMinutes?: number }) => {
+        const world = makeWorld({ pendingStimuli: [stimulus({ id: 's-1', characterId: 'c0', atRealMs: T0 })] });
+        await runInterludes(
+            world,
+            { agent: new ScriptedAgent({ response: '應了一聲', activity }), recall: new SpyRecall() },
+            { nowMs: T0 + 2 * MIN },
+        );
+        return world.data.activityByChar?.c0;
+    };
+    const base = T0 + 2 * MIN;
+
+    assert.deepEqual(await doing({ what: '排戲' }), { what: '排戲', startRealMs: base, endRealMs: base + 60 * MIN }, '沒說多久就一個時辰');
+    assert.equal((await doing({ what: '排戲', forMinutes: 1 }))?.endRealMs, base + 10 * MIN, '太短夾到十分鐘');
+    assert.equal((await doing({ what: '排戲', forMinutes: 9_999 }))?.endRealMs, base + 360 * MIN, '太長夾到六個時辰');
+    assert.equal((await doing({ what: '一'.repeat(50), forMinutes: 30 }))?.what.length, 20, '活動名是一句，不是一段');
+    assert.equal(await doing({ what: '  ', forMinutes: 30 }), undefined, '沒說在做什麼就不記');
+});
+
+test('在期的自陳活動壓過節律提示；過了鐘點便讓回節律（不必清表）', async () => {
+    const hint = () => '甲在戲台練功'; // 行當節律推的「此刻本該在哪」（零 LLM 的預設行程）
+    const live = makeWorld({
+        pendingStimuli: [stimulus({ id: 's-1', characterId: 'c0', atRealMs: T0 })],
+        activityByChar: { c0: { what: '同師姐對戲', startRealMs: T0, endRealMs: T0 + 30 * MIN } },
+    });
+    const played = await runInterludes(live, { agent: new FakeSceneAgent(), recall: new SpyRecall() }, {
+        nowMs: T0 + 2 * MIN,
+        activityHint: hint,
+    });
+    assert.match(played[0].response, /你正在：同師姐對戲/, 'agent 明示的覆寫壓過節律的預設行程');
+    assert.doesNotMatch(played[0].response, /戲台練功/);
+
+    // 同一筆活動，過了鐘點：視同不存在，節律接回來——沒有誰需要去清那張表。
+    const stale = makeWorld({
+        pendingStimuli: [stimulus({ id: 's-2', characterId: 'c0', atRealMs: T0 })],
+        activityByChar: { c0: { what: '同師姐對戲', startRealMs: T0 - 60 * MIN, endRealMs: T0 } },
+    });
+    const after = await runInterludes(stale, { agent: new FakeSceneAgent(), recall: new SpyRecall() }, {
+        nowMs: T0 + 2 * MIN,
+        activityHint: hint,
+    });
+    assert.match(after[0].response, /甲在戲台練功/, '過期的活動不再壓過節律');
+});
+
+test('起念全鏈路：折子裡起一念 → 到期 → 轉刺激 → 再一折，兩折都計本人預算', async () => {
+    const agent = new FakeSceneAgent(); // 確定性替身的把手：捎話帶「稍後」二字才立念
+    const recall = new SpyRecall();
+    const world = makeTieredWorld({
+        pendingStimuli: [stimulus({ id: 's-1', characterId: 'c0', kind: 'note', text: '東家說這事稍後再議', atRealMs: T0 })],
+    });
+
+    const first = await runInterludes(world, { agent, recall }, { nowMs: T0 + 2 * MIN });
+    assert.equal(first.length, 1, '第一折：聽見東家的話');
+    const intents = world.data.pendingIntents ?? [];
+    assert.equal(intents.length, 1, '台柱在折子裡替自己記下一樁稍後要辦的事');
+    const dueMs = intents[0].dueRealMs;
+    assert.equal(dueMs, T0 + 2 * MIN + 15 * MIN);
+
+    // driver 那頭只 peek——到點之前什麼也不做。
+    assert.equal(hasDueIntent(world, dueMs - 1), false);
+    assert.equal(hasDueIntent(world, dueMs), true);
+
+    // 呼叫端的責任：取出來、推進 pendingStimuli（引擎不代勞，見 collectDueIntents）。
+    const due = collectDueIntents(world, dueMs);
+    assert.equal(due.length, 1);
+    (world.data.pendingStimuli ??= []).push(...due);
+
+    // 起念免 debounce：到點就是此刻，這一折立刻成局。
+    const second = await runInterludes(world, { agent, recall }, { nowMs: dueMs });
+    assert.equal(second.length, 1, '第二折：他自己先前捎的話送到了');
+    assert.equal(second[0].stimuli[0].kind, 'intent');
+    assert.match(second[0].response, /想起先前的念/, '起念與外來捎話說法上分得開');
+    assert.deepEqual(world.data.pendingStimuli, []);
+    assert.deepEqual(world.data.interludeLedger?.c0, { day: 1, count: 2 }, '起念照計本人當日折子上限（防自我 DDoS）');
+    assert.equal(world.data.pendingIntents?.length, 1, '這一折又起了一念，仍是至多一枚在途');
+    assert.equal(recall.calls.length, 2, '兩折各記一筆心事');
 });

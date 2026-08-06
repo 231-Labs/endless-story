@@ -73,6 +73,9 @@ interface RawPreset {
         /** Authored SKILLS — style-imparting capabilities (see `Skill`). Carried
          *  verbatim onto the CastMember; optional & backward-compatible. */
         skills?: Skill[];
+        /** 台柱／班底 (喚醒層 P2) — 缺席 ⇒ 'ensemble'：惰性是預設，台柱要點名。
+         *  只閘「起念」一件事（見 CastMember.agency）；被動折子與大拍全員照舊。 */
+        agency?: 'principal' | 'ensemble';
     }>;
 }
 
@@ -727,6 +730,9 @@ export function buildWorldState(
             // Authored skills carried verbatim (omit the field when none, so a
             // skill-less preset produces a skill-less — unchanged — CastMember).
             ...(c.skills?.length ? { skills: c.skills } : {}),
+            // 台柱要點名（喚醒層 P2）：種子沒說就不寫這一欄，於是這個人是班底——
+            // 沒點到名的人一毛成本也不生，未標 agency 的舊種子建出來的世界不變。
+            ...(c.agency ? { agency: c.agency } : {}),
         });
         const work = resolveScene(c.work_scene, c.name, 'work_scene');
         homeByChar[id] = resolveScene(c.home_scene, c.name, 'home_scene');

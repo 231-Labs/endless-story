@@ -411,8 +411,9 @@ export interface LabInterludeLive {
     partOfDay: string;
     /** 落款的真實毫秒——這一折在真實時間裡的位置。 */
     realMs: number;
-    /** debounce 窗內合併聽見的全部捎話。 */
-    stimuli: Array<{ text: string; kind: 'poke' | 'note' }>;
+    /** debounce 窗內合併聽見的全部捎話。'intent'（起念）是這個人自己先前捎給
+     *  此刻的一句話——來路不同，形狀相同（見引擎 `InterludeStimulus`）。 */
+    stimuli: Array<{ text: string; kind: 'poke' | 'note' | 'intent' }>;
     response: string;
     memoryNote?: string;
 }

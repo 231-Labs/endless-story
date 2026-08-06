@@ -33,6 +33,9 @@ export function LabWakeBar({
 
     if (snapshot.timeMode !== 'mirror') return null;
     const alive = snapshot.alive;
+    // 誰此刻正做著一件要花時間的事（角色自陳的 activity，喚醒層 P2）——捎話之前
+    // 先看得見對方在忙什麼，「柳安春（排戲中）」比一個光禿禿的名字有人味得多。
+    const activityByChar = new Map(snapshot.activities.map((a) => [a.characterId, a.what]));
 
     const toggleAlive = async () => {
         setToggling(true);
@@ -92,9 +95,14 @@ export function LabWakeBar({
                     title="捎話給誰"
                 >
                     <option value="">捎話給…</option>
-                    {snapshot.characters.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
+                    {snapshot.characters.map((c) => {
+                        const doing = activityByChar.get(c.id);
+                        return (
+                            <option key={c.id} value={c.id}>
+                                {doing ? `${c.name}（${doing}）` : c.name}
+                            </option>
+                        );
+                    })}
                 </select>
                 <input
                     type="text"

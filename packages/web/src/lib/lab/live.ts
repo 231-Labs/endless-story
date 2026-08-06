@@ -92,6 +92,10 @@ export interface LabLiveSnapshot {
     /** 最近幾折（喚醒層 P1），newest last——供折子卡消費。tick 卷／從未捎過話
      *  的 mirror 卷是空陣列，不是「壞了」。 */
     interludes: LabInterludeLive[];
+    /** 此刻正在做的事（喚醒層 P2）——只帶**在期**的（`endRealMs > 此刻`）：過期的
+     *  活動視同不存在，不必等誰去清它。角色自陳的活動才在這裡；行當節律推的「本該
+     *  在哪」是零 LLM 的預設行程，不進這一欄。沒人自陳過就是空陣列。 */
+    activities: Array<{ characterId: string; what: string }>;
 }
 
 /** One thing that happened TO the world (or that somebody did to it). */
@@ -587,6 +591,12 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         ...r,
         portraitUrl: assetUrlFor('character', r.name),
     }));
+    // 在期的自陳活動。這裡取樣牆鐘是誠實的：問的是「此刻誰正做著什麼」，而快照
+    // 本來就是「此刻」的一張畫像（引擎那頭 nowMs 全由呼叫端傳，紀律不在這一層）。
+    const nowMs = Date.now();
+    const activities = Object.entries(w.activityByChar ?? {})
+        .filter(([, a]) => a.endRealMs > nowMs)
+        .map(([characterId, a]) => ({ characterId, what: a.what }));
 
     return {
         runId,
@@ -621,6 +631,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         ...(dateLabel ? { dateLabel } : {}),
         alive: meta.alive === true,
         interludes,
+        activities,
     };
 }
 

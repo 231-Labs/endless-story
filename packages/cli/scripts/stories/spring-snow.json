@@ -641,6 +641,7 @@
       "ageYears": 42,
       "gender": "女",
       "role": "班主",
+      "agency": "principal",
       "publicly_recognizable": true,
       "skills": [
         { "name": "調度", "kind": "談", "style": "三言兩語就把一班人的去留、戲碼、臉面排停當，話不高卻沒人敢不聽", "level": 5 },
@@ -682,6 +683,7 @@
       "ageYears": 28,
       "gender": "女",
       "role": "花旦",
+      "agency": "principal",
       "skills": [
         { "name": "婉轉", "kind": "唱", "style": "青衣行腔端莊裡含情，一句『原來姹紫嫣紅開遍』能把三面茶座唱靜", "level": 5 },
         { "name": "溫厚可倚", "kind": "風", "style": "替人圓場、把難堪輕輕接住，滴水不漏的體面底下是一副可倚的溫厚", "level": 5 },
@@ -726,6 +728,7 @@
       "ageYears": 24,
       "gender": "女",
       "role": "小生",
+      "agency": "principal",
       "skills": [
         { "name": "悲工", "kind": "唱", "style": "悲切以情帶聲，一句三嘆，像對著空台唱給早不回頭的人聽", "level": 5 },
         { "name": "文戲", "kind": "身", "style": "一柄摺扇開合便撩動滿堂春水，身段清儒俊雅，英氣只在眉眼神采", "level": 5 },

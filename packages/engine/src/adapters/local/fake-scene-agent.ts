@@ -442,16 +442,29 @@ export class FakeSceneAgent implements SceneAgentPort {
      * 折子（確定性替身）— 零鑰零費的一次幕間演繹：聽見最後一則捎話，答一句、記一筆。
      * 它證的是喚醒層的接線（debounce → 預算 → 演繹 → 記憶 → 拍首 percept 全程走通），
      * 不是戲；真座席換 RunnerSceneAgent。捎話全空 ⇒ null（引擎照樣把它留給大拍）。
+     *
+     * P2 的兩樁自陳同樣是確定性的：
+     *   · `activity` —— **每一折都回同一樁**（練功一個時辰），好讓「自陳活動壓過節律
+     *     提示」這條規則在零 LLM 下也走得通、驗得準。
+     *   · `followUp` —— **平時一律不回**。替身若每折都替自己排下一枚念，確定性測試就
+     *     會無限自我排程。只留一個可控的把手：最後一則捎話裡出現「稍後」二字，才立
+     *     一枚 15 分鐘後的念——測試要走完「折子→起念→到期→轉刺激→再折子」全鏈路
+     *     時，就說一句帶「稍後」的話。
      */
     async interlude(input: InterludeInput): Promise<InterludeReply | null> {
         const last = [...input.stimuli].reverse().find((stimulus) => stimulus.text.trim());
         if (!last) return null;
         const gist = last.text.trim().slice(0, 12);
-        // 此刻本該在哪（行當節律推的存在形狀）有給就站在那兒聽——替身也該在自己的位置上。
+        // 此刻本該在哪（行當節律推的存在形狀，或自陳的活動）有給就站在那兒聽——
+        // 替身也該在自己的位置上。
         const heard = input.activityHint ? `${input.activityHint}，聽見了` : `${input.name}聽見了`;
+        // 起念到點與外頭捎話是同一套機制、兩種來路：說法上分得開，機制上不分家。
+        const prefix = input.stimuli.some((stimulus) => stimulus.kind === 'intent') ? '想起先前的念，' : '';
         return {
-            response: `${heard}：「${gist}」…點頭記下。`,
+            response: `${prefix}${heard}：「${gist}」…點頭記下。`,
             memoryNote: `${input.clock.partOfDay}幕間，有人捎話：「${gist}」，我記下了。`,
+            activity: { what: '練功', forMinutes: 60 },
+            ...(last.text.includes('稍後') ? { followUp: { inMinutes: 15, note: last.text.trim().slice(0, 20) } } : {}),
         };
     }
 

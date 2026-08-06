@@ -26,7 +26,9 @@ import {
     WorldState,
     applySeasonFrame,
     attachEventDeck,
+    collectDueIntents,
     createWorldFromPreset,
+    hasDueIntent,
     loadEventDeckFile,
     loadSeasonFrameFile,
     reconcileSeasonObjects,
@@ -491,7 +493,10 @@ export class LabRunManager {
             run.pendingTicks += 1;
             queued = true;
         }
-        if (run.world.data.pendingStimuli?.length) {
+        // 佇列裡有話，或有一枚到期的起念——後者用 peek（`hasDueIntent` 不改狀態），
+        // driver 只判斷、只 enqueue；真正把起念取出來轉成刺激是序列化 job 的事
+        // （見 runInterludeBatch），狀態變更只發生在單寫者隊內。
+        if (run.world.data.pendingStimuli?.length || hasDueIntent(run.world, nowMs)) {
             run.pendingInterlude = true;
             queued = true;
         }
@@ -649,6 +654,10 @@ export class LabRunManager {
      * ＋ append 進 `interludes.jsonl`（新檔，一行一折）＋推進折子環供 live snapshot。
      * 沒有一折成局（全部未滿齡／超預算／座席缺席）就什麼都不寫——避免每 45s
      * 巡一次都白產生一份 snapshot。
+     *
+     * 起念（P2）也在這裡入場：跑 `runInterludes` 之前先 `collectDueIntents` 把到期的
+     * 念取出、轉成刺激推進同一個佇列。取出這個動作**會改狀態**，所以它只能在這個
+     * 序列化的 job 裡；driver 那頭判 due 用的是不改狀態的 `hasDueIntent`。
      */
     private async runInterludeBatch(run: ActiveRun, stateDir: string): Promise<void> {
         const iCfg = run.meta.config.interlude;
@@ -658,6 +667,16 @@ export class LabRunManager {
         const dateLabel = run.meta.config.timeMode === 'mirror'
             ? formatStoryDate(storyNow(nowMs, SPRING_SNOW_MIRROR).date)
             : undefined;
+        // 起念到點——**在隊內**取出，轉成與東家留言同形的刺激推進同一個佇列，此後
+        // 走的就是折子那一套既有閘門（分組、預算、落款、拍首兜底）。這是全流程裡
+        // 唯一會動 pendingIntents 的地方，而它在單寫者隊裡（AGENT_WAKE_LAYER §五）。
+        const due = collectDueIntents(run.world, nowMs);
+        if (due.length) {
+            (run.world.data.pendingStimuli ??= []).push(...due);
+            for (const intent of due) {
+                this.log(run, `[interlude] ${run.world.nameById(intent.characterId)}先前起的念到了：「${intent.text.slice(0, 24)}」`);
+            }
+        }
         let records: InterludeRecord[];
         try {
             records = await runInterludes(run.world, { agent: run.deps.agent, recall: run.deps.recall }, {
@@ -668,10 +687,17 @@ export class LabRunManager {
             });
         } catch (error) {
             // 折子失手不是刺激的錯——原封留在佇列，下一次巡（driver 或另一次戳）再試。
+            // 到期的起念此時已在 pendingStimuli 裡（只是換了個佇列待著），照樣不會丟。
             this.log(run, `[interlude] 折子演繹失手：${error instanceof Error ? error.message : String(error)}`);
+            if (due.length) run.world.snapshot(stateDir);
             return;
         }
-        if (!records.length) return;
+        // 一折未成也可能有東西要落檔：到期的起念已從 pendingIntents 移進 pendingStimuli，
+        // 這一步不寫，重啟後那枚念就兩頭落空——「捎話只會晚到，不會失蹤」的鐵律及於起念。
+        if (!records.length) {
+            if (due.length) run.world.snapshot(stateDir);
+            return;
+        }
         run.world.snapshot(stateDir);
         const file = interludesFileOf(run.meta.id);
         for (const record of records) {

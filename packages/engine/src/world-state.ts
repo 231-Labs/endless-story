@@ -118,6 +118,13 @@ export interface CastMember {
      *  box-office (滿座長臉、停鑼折面子). Optional & backward-compatible: absent ⇒ a
      *  neutral baseline (`renownOf` ⇒ 0.5). Plain JSON, carried by snapshot/restore. */
     renown?: number;
+    /** 台柱／班底 (agency tier, 喚醒層 P2) — 這個人有沒有**自己起念**的份。
+     *  `'principal'`（台柱，初期 2–4 人）可在折子裡替自己排一樁稍後要辦的事
+     *  （`InterludeReply.followUp`）；`'ensemble'`（班底）不能——他們仍被捎話、
+     *  仍上大拍、仍能自陳 activity，只是不會自己給自己安排未來。
+     *  **缺席 ⇒ 'ensemble'：惰性是預設，台柱要點名**——沒點到名的人一毛成本
+     *  也不生，舊卷與舊種子照原樣讀。Plain JSON, carried by snapshot/restore. */
+    agency?: 'principal' | 'ensemble';
     /** 自視・自估 (self-regard) — how this person PRIVATELY rates their OWN standing,
      *  0..1. It may DIVERGE from `renown`: a 當紅卻怕不夠好 star carries high renown
      *  and low self-regard; a nobody may think the world owes them their due. Only
@@ -672,6 +679,20 @@ export interface WorldStateData {
     /** 上一個大拍以來演過的折子。拍首 drain 成一行世情 percept 後清空——大拍
      *  **聽說**折子，不重演它。 */
     interludesSinceLastTick?: import('./interlude.ts').InterludeRecord[];
+
+    // ── 起念與活動 (喚醒層 P2) — 同樣只加不改：兩欄全缺席 ⇒ 世界與 P1 完全一致。
+
+    /** 起念佇列 —— 角色**捎給未來自己的話**。台柱在折子裡立下一枚（`followUp`），
+     *  到期由 `collectDueIntents` 移出、轉成 `kind: 'intent'` 的刺激推進
+     *  `pendingStimuli`，之後走折子全套既有閘門（預算、單寫者、落款、拍首兜底）
+     *  ——起念沒有第二套機制。每人至多一枚在途（新的換舊的），所以這張表最多與
+     *  台柱同大小，不隨日子增長。 */
+    pendingIntents?: Array<{ id: string; characterId: string; dueRealMs: number; note: string }>;
+    /** 在做的事 —— characterId → 一段有起訖的活動（「排戲」14:10–16:30）。這是
+     *  agent 對行當節律的**明示覆寫**：在期者（`endRealMs > nowMs`）優先於呼叫端
+     *  給的 `activityHint`（節律是零 LLM 的預設行程，見設計稿 §六之四）。過期
+     *  自然失效——不另設清理，讀的人自己比時刻。 */
+    activityByChar?: Record<string, { what: string; startRealMs: number; endRealMs: number }>;
 }
 
 /**

@@ -437,8 +437,10 @@ export interface PlanDayReply {
 export interface InterludeStimulus {
     id: string;
     characterId: string;
-    /** P1：'poke'（實驗者戳）| 'note'（留言）；P1b 鏈側三源再擴。 */
-    kind: 'poke' | 'note';
+    /** P1：'poke'（實驗者戳）| 'note'（留言）；P2 加 'intent'（起念——**自己先前
+     *  捎給此刻的一句話**，到點由 `collectDueIntents` 轉成刺激入佇列，走折子全套
+     *  既有閘門，不另造第二套機制）；P1b 鏈側三源再擴。 */
+    kind: 'poke' | 'note' | 'intent';
     text: string;
     atRealMs: number;
 }
@@ -466,6 +468,18 @@ export interface InterludeReply {
     response: string;
     /** 選配：記一筆心事（入長期記憶）。 */
     memoryNote?: string;
+    /** 起念（P2）—— 座席在折子裡替自己記一樁「稍後要辦的事」：**自己捎話給未來的
+     *  自己**。座席不必自律，約束一律由引擎執行（`runInterludes`）：
+     *   · **僅 `agency === 'principal'`（台柱）生效**——班底的 followUp 逕行忽略；
+     *   · `inMinutes` 夾 [15, 1440]（非數逕行忽略）；`note` 取前 40 字；
+     *   · **每人至多一枚在途**（新的換舊的——人會改主意）。
+     *  存進 `WorldData.pendingIntents`，到點轉成 `kind: 'intent'` 的刺激。 */
+    followUp?: { inMinutes: number; note: string };
+    /** 輕量 activity（P2）—— 「我此刻正做著一件要花時間的事」：agent 對行當節律
+     *  （零 LLM 的預設行程）的**明示覆寫**。約束同樣由引擎執行：`what` 取前 20 字
+     *  （空則忽略）、`forMinutes` 夾 [10, 360]、缺席預設 60。不限 tier（班底被捎話
+     *  時也可自陳在做什麼）；過期自然失效，不另清。 */
+    activity?: { what: string; forMinutes?: number };
 }
 
 /** NIGHTLY 心事自改 input — the unspoken matter and what LANDED on it today. */

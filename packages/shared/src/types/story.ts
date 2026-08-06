@@ -186,6 +186,13 @@ export interface StoryFoundingMember {
    */
   disabled?: boolean;
   /**
+   * 台柱／班底 (agency tier, 喚醒層 P2) — 'principal' 的人能在折子裡替自己排一樁
+   * 稍後要辦的事（起念）；'ensemble' 不能。**缺席 ⇒ 'ensemble'：惰性是預設，
+   * 台柱要點名**，所以未標這一欄的種子成本與行為完全不變。被動折子（被捎話）
+   * 與大拍場景全員照舊。見 docs/narrative/AGENT_WAKE_LAYER.md §六之二 / 附錄 B。
+   */
+  agency?: 'principal' | 'ensemble';
+  /**
    * Residence scene name (must match a `scenes[].name`) — the night router's
    * home anchor (G10), resolved by home-seed.ts ensureHomesSeeded. Also the
    * mint-scene fallback when `work_scene` is absent. Omit → no residence
