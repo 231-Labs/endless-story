@@ -59,7 +59,7 @@ function resolveProvider(): ProviderCfg | null {
           provider: 'poe',
           apiKey: e.POE_API_KEY,
           baseUrl: 'https://api.poe.com/v1',
-          models: { primary: e.POE_MODEL_PRIMARY ?? 'GLM-5.1-FW', cheap: e.POE_MODEL_CHEAP ?? 'GLM-4.7-N' },
+          models: { primary: e.POE_MODEL_PRIMARY ?? 'GLM-4.6', cheap: e.POE_MODEL_CHEAP ?? 'GLM-4.6' },
           anthropic: false,
         }
       : null;
