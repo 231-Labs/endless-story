@@ -1088,7 +1088,9 @@ export class RunnerSceneAgent implements SceneAgentPort {
             : `第${input.clock.day}日・${input.clock.partOfDay}`;
         const percept = [
             '【幕間·你此刻不在場上】',
-            `${when}。${input.activityHint ? `你此刻本該在：${input.activityHint}。` : ''}`,
+            // activityHint 已是完整一句（「你正在：排戲」或節律推的所在），直接落地，
+            // 不再包一層「你此刻本該在」——否則疊成「你此刻本該在：你正在：排戲」。
+            `${when}。${input.activityHint ? `${input.activityHint}。` : ''}`,
             onlyIntent ? '你心裡自己記著的一樁事，時候到了：' : '有話遞到你跟前：',
             said,
             '',

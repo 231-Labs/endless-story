@@ -262,9 +262,9 @@ export function collectDueIntents(world: WorldState, nowMs: number): InterludeSt
         id: intent.id,
         characterId: intent.characterId,
         kind: 'intent' as const,
+        text: intent.note,
         // 落款用「當初排定的時刻」而非此刻：起念的齡從它該響的那一刻算起，
         // 巡佇列晚了幾十秒不該讓它顯得比實際年輕。
-        text: intent.note,
         atRealMs: intent.dueRealMs,
     }));
 }
