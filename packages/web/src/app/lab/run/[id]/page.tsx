@@ -94,11 +94,10 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
         <main className="h-dvh snap-y snap-mandatory overflow-y-auto no-scrollbar">
             {/* 第一屏 —— 純手卷與拍流 */}
             <section className="relative flex h-dvh snap-start snap-always flex-col">
-            {/* 簷口一線 —— 珠簾即當日行程：一拍亮一段，走拍的那串在呼吸 */}
+            {/* 簷口一線 —— 珠簾即當日行程：一串一拍，走拍的那串在呼吸 */}
             <header className="relative border-b border-hairline/60 bg-surface/60 px-4 pb-3 pt-4 backdrop-blur-sm dark:bg-elevated/40 sm:px-8">
                 <BeadCurtain
-                    strings={34}
-                    className="absolute inset-x-0 top-0 h-8 opacity-60"
+                    className="absolute inset-x-0 top-0"
                     progress={{
                         total: snapshot.clock.ticksPerDay,
                         done: snapshot.clock.tickOfDay,
