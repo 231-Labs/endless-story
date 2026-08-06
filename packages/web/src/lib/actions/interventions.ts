@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import type { InterventionKind } from '@endless-story/shared';
 import { interventionsApi } from '@/lib/api/index';
+import { enqueueWakeStimulus } from '@/lib/chain/wake-store';
 
 /**
  * Owner send-dream / whisper server action — called by the Composer form action.
@@ -49,6 +50,17 @@ export async function submitInterventionAction(
       kind: kind as InterventionKind,
       text: text.trim(),
     });
+    // 東家留言 → 喚醒層的一則捎話（AGENT_WAKE_LAYER.md 附錄 C4）：「下一個 tick
+    // 才會聽見」自此變成「幾分鐘內」。**注夢刻意不映射**——夢的本義是深宵入枕
+    // （dream.ts 自有通道與時序），即時喚醒違背夢的設計。
+    // 入佇列失手不影響留言本身：留言已經寄到，那一句最遲仍會在下一個大拍被聽見。
+    if (kind === 'whisper') {
+      try {
+        enqueueWakeStimulus({ characterId, kind: 'note', text: text.trim() });
+      } catch (e) {
+        console.warn('[interventions] wake enqueue failed:', e instanceof Error ? e.message : e);
+      }
+    }
     revalidatePath('/dossier');
     return { ok: true };
   } catch (e) {

@@ -21,7 +21,36 @@
  */
 
 import type { InterludeInput, InterludeStimulus, PartOfDay, RecallPort, SceneAgentPort } from './ports.ts';
-import type { CastMember, WorldState, WorldStateData } from './world-state.ts';
+import type { CastMember, WorldStateData } from './world-state.ts';
+
+/**
+ * 折子機制觸及的**世界最小面**（P1b）。
+ *
+ * 型別收窄，不是機制外移：折子仍然只住在這個檔案裡，只是它不再要求呼叫端非得
+ * 端出一整個 `WorldState`。lab 照舊傳 `WorldState`（class 結構相容，呼叫點零改動）；
+ * 鏈側沒有 engine WorldState（tick-loop 由鏈讀＋檔案店逐拍重建），改以一枚 duck
+ * shim 滿足這個介面——一份檔案店的 `data` 加一個 `castById`，機制一行都不用抄過去。
+ *
+ * 形狀嚴格取自本檔實際觸及的欄位：多開一個欄位，就是多逼鏈側湊一份它其實沒有的世界。
+ */
+export type InterludeWorldData = Pick<
+    WorldStateData,
+    | 'sagaId'
+    | 'clock'
+    | 'pendingStimuli'
+    | 'interludeLedger'
+    | 'interludesSinceLastTick'
+    | 'pendingIntents'
+    | 'activityByChar'
+>;
+
+/** 折子觸及的角色面：認人（id/name）、餵座席（persona）、起念的 tier 閘（agency）。 */
+export type InterludeCastMember = Pick<CastMember, 'id' | 'name' | 'persona' | 'agency'>;
+
+export interface InterludeWorld {
+    data: InterludeWorldData;
+    castById(id: string): InterludeCastMember | undefined;
+}
 
 /** 合併窗預設一分鐘：戳完到聽見的體感是「幾十秒」，不是「幾秒」也不是「下一拍」。 */
 export const DEFAULT_INTERLUDE_DEBOUNCE_MS = 60_000;
@@ -86,7 +115,7 @@ export interface InterludeOpts {
  * 情形一律**原封留在佇列**，等下一次巡或下一個大拍。成局的那一組才移出佇列。
  */
 export async function runInterludes(
-    world: WorldState,
+    world: InterludeWorld,
     deps: { agent: SceneAgentPort; recall: RecallPort },
     opts: InterludeOpts,
 ): Promise<InterludeRecord[]> {
@@ -194,8 +223,8 @@ export async function runInterludes(
  * 座席不必自律。**每人至多一枚在途**：新的換舊的，人會改主意。
  */
 function applyFollowUp(
-    w: WorldStateData,
-    member: CastMember,
+    w: InterludeWorldData,
+    member: InterludeCastMember,
     followUp: { inMinutes: number; note: string } | undefined,
     nowMs: number,
     recordId: string,
@@ -213,7 +242,7 @@ function applyFollowUp(
 /** 活動落帳 —— agent 自陳「我此刻正做著一件要花時間的事」。不限 tier：班底被捎話時
  *  也可以自陳在做什麼（那正是「有位置、有姿態」的班底該有的樣子）。 */
 function applyActivity(
-    w: WorldStateData,
+    w: InterludeWorldData,
     characterId: string,
     activity: { what: string; forMinutes?: number } | undefined,
     nowMs: number,
@@ -239,7 +268,7 @@ function clampNumber(value: number, min: number, max: number): number {
  * 它不寫東西，可以在單寫者隊**之外**安全地呼；真正的取用是 `collectDueIntents`
  * 的事，那個只能在隊內呼。
  */
-export function hasDueIntent(world: WorldState, nowMs: number): boolean {
+export function hasDueIntent(world: InterludeWorld, nowMs: number): boolean {
     return (world.data.pendingIntents ?? []).some((intent) => intent.dueRealMs <= nowMs);
 }
 
@@ -251,7 +280,7 @@ export function hasDueIntent(world: WorldState, nowMs: number): boolean {
  * 本函式只負責「取出並轉形」——**呼叫端負責把回傳的刺激 push 進
  * `w.pendingStimuli`**，因為要不要入佇列、何時入，是那條寫者隊的事，不是這裡的。
  */
-export function collectDueIntents(world: WorldState, nowMs: number): InterludeStimulus[] {
+export function collectDueIntents(world: InterludeWorld, nowMs: number): InterludeStimulus[] {
     const w = world.data;
     const queue = w.pendingIntents;
     if (!queue?.length) return [];
@@ -276,7 +305,7 @@ export function collectDueIntents(world: WorldState, nowMs: number): InterludeSt
  * 指令。連同**滯留未答**的刺激（超預算或座席缺席而留下的）一併說給本人聽：捎話
  * 只會晚到，不會失蹤；預算設 0 時，這一行就退化成今日的「下一拍才聽見」。
  */
-export function drainInterludePercepts(world: WorldState): Record<string, string> {
+export function drainInterludePercepts(world: InterludeWorld): Record<string, string> {
     const w = world.data;
     const records = w.interludesSinceLastTick ?? [];
     const stale = w.pendingStimuli ?? [];

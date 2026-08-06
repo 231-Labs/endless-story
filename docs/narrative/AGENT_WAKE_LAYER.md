@@ -356,6 +356,17 @@ world-loop 的 `sleepToNextBeat` 內每 ~2 分鐘 POST `/api/wake {drain:true}`
 （兩個呼叫點——正常與 paused 分支——一併覆蓋；照 `runShowrunnerBeat`
 的容錯 fetch 模板）。legacy interval 模式同樣受惠。
 
+### C7 as-built 裁定（實作時定案）
+
+- wake store 多存一欄 `activityByChar`——引擎折子會寫自陳活動，不存則
+  每巡作廢；`sagaId`/`clock` 刻意不存（世界的當下，不造第二真相源）。
+- **C5 只對「本拍上場的人」入 percept**：生產側每拍只演輪值 slice，
+  沒輪到的人那一行原封留佇列等他上場——「捎話只會晚到，不會失蹤」；
+  查無此人／已謝者清出，佇列不壓死信。
+- **鏈側起念暫緩**：鏈側 castById 不標 `agency` ⇒ 全員班底（被動折子
+  照舊）。台柱要點名，而鏈側尚無點名之處——點名來源（preset 名單／
+  合約欄位）另案；lab 已有完整 P2。
+
 ## 八之二、外部提案評審記錄（婉拒清單）
 
 一份外部設計說明與本設計方向收斂（時間連續、事件喚醒、拒絕 1440 tick、

@@ -22,6 +22,11 @@
  * boundary scheduling — never a backlog of catch-up ticks: the world lived
  * through the downtime, nobody was there to perform it.
  *
+ * 喚醒層 (docs/narrative/AGENT_WAKE_LAYER.md)：拍與拍之間的等待裡，每 ~2 分鐘
+ * POST 一次 /api/wake {drain:true} —— 東家的一句留言不必等到下一個時辰才被聽見。
+ * 巡佇列與大拍共用服務端同一條演繹鏈，撞上進行中的大拍就等它；沒有捎話待答時
+ * 這一巡零成本，世界照舊只有六拍。
+ *
  * Flags:
  *   --mirror               sleep to the next 時辰 boundary instead of --interval
  *                          (env fallback: ES_TIME_MODE=mirror)
@@ -234,30 +239,90 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 
+/** 拍與拍之間巡一次折子佇列的間隔（喚醒層 P1b）。兩分鐘：東家戳完到聽見的體感是
+ *  「幾分鐘內」，而不是「下一拍」（時辰邊界一等就是幾小時）。 */
+const WAKE_DRAIN_INTERVAL_MS = 120_000;
+
+interface WakeDrainResult {
+    ok?: boolean;
+    played?: number;
+    reason?: string;
+    error?: string;
+}
+
+/**
+ * POST 一次巡佇列：到期的起念轉成刺激，due 的捎話演成折子（機制全在服務端）。
+ *
+ * 容錯照 `runShowrunnerBeat` 的模板——絕不拋、絕不擋住下一拍：世界沒就緒、
+ * 座席失手、連線斷了，佇列都原封留著，下一巡或下一個大拍照樣聽得見。
+ * 沒演成一折就一個字都不打（每兩分鐘一行「0 折」只會淹掉真正的世情）。
+ */
+async function runWakeDrain(url: string, secret?: string): Promise<void> {
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                ...(secret ? { authorization: `Bearer ${secret}` } : {}),
+            },
+            body: JSON.stringify({ drain: true }),
+            // 一折是短演繹（服務端 maxDuration 60s）；斷在這裡也只是這一巡沒巡成，
+            // 但**絕不能**讓一個掛住的連線壓著整段拍間等待不放。
+            signal: AbortSignal.timeout(90_000),
+        });
+        let json: WakeDrainResult | null = null;
+        try {
+            json = (await res.json()) as WakeDrainResult;
+        } catch {
+            /* non-JSON handled below */
+        }
+        if (!res.ok) {
+            console.warn(`${clr.red('[wake] ✗')} HTTP ${res.status}${json?.error ? ` — ${json.error}` : ''}`);
+            return;
+        }
+        const played = json?.played ?? 0;
+        if (played > 0) console.log(`${clr.green('[wake] ✓')} 幕間演了 ${clr.bold(`${played} 折`)}`);
+    } catch (err) {
+        console.warn(`${clr.red('[wake] ✗')} ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
 /**
  * Sleep until the next beat. Mirror worlds wait for the next 時辰 boundary
  * (so a tick always lands at the top of a 時辰); legacy worlds wait intervalMs.
  *
- * 時辰邊界一等就是幾小時，所以鏡像的等待切成小段輪詢 `shouldStop`——
+ * 時辰邊界一等就是幾小時，所以等待切成小段輪詢 `shouldStop`——
  * 否則 Ctrl-C 之後這裡會壓著不放，還白打一拍才收。
+ *
+ * 這段等待正是折子的活動範圍：每 ~2 分鐘 POST 一次 `/api/wake {drain:true}`
+ * （喚醒層 P1b）。巡佇列與大拍共用服務端的同一條演繹鏈，撞上進行中的大拍就等它，
+ * 所以在這裡呼是安全的；`wake` 缺席（未給 url）則整段行為與從前逐字相同。
  */
 async function sleepToNextBeat(
     intervalMs: number,
     mirror: MirrorTimeConfig | undefined,
     shouldStop: () => boolean,
+    wake?: { url: string; secret?: string },
 ): Promise<void> {
-    if (!mirror) {
-        await sleep(intervalMs);
-        return;
+    let untilMs: number;
+    if (mirror) {
+        untilMs = nextBucketBoundaryMs(Date.now(), mirror);
+        const at = storyNow(untilMs, mirror);
+        const mins = Math.round((untilMs - Date.now()) / 60_000);
+        console.log(
+            `${clr.dim('[world-loop]')} 下一拍：${clr.bold(hhmm(at.hour, at.minute))} ${clr.dim(`（${at.partOfDay}）· ${mins} 分後`)}`,
+        );
+    } else {
+        untilMs = Date.now() + intervalMs;
     }
-    const nextMs = nextBucketBoundaryMs(Date.now(), mirror);
-    const at = storyNow(nextMs, mirror);
-    const mins = Math.round((nextMs - Date.now()) / 60_000);
-    console.log(
-        `${clr.dim('[world-loop]')} 下一拍：${clr.bold(hhmm(at.hour, at.minute))} ${clr.dim(`（${at.partOfDay}）· ${mins} 分後`)}`,
-    );
-    while (Date.now() < nextMs && !shouldStop()) {
-        await sleep(Math.min(1000, nextMs - Date.now()));
+    let nextDrainMs = Date.now() + WAKE_DRAIN_INTERVAL_MS;
+    while (Date.now() < untilMs && !shouldStop()) {
+        await sleep(Math.min(1000, untilMs - Date.now()));
+        if (wake && Date.now() >= nextDrainMs && !shouldStop()) {
+            await runWakeDrain(wake.url, wake.secret);
+            // 巡一次可能花上十幾秒（真座席在答話）——間隔從**收工那一刻**起算。
+            nextDrainMs = Date.now() + WAKE_DRAIN_INTERVAL_MS;
+        }
     }
 }
 
@@ -405,6 +470,13 @@ async function main() {
     const showrunnerUrl = cleanBase.endsWith('/api/tick')
         ? cleanBase.replace(/\/api\/tick$/, '/api/showrunner')
         : `${cleanBase}/api/showrunner`;
+    // 折子巡佇列（喚醒層 P1b）——與大拍同一個服務、同一把 secret。
+    const wake = {
+        url: cleanBase.endsWith('/api/tick')
+            ? cleanBase.replace(/\/api\/tick$/, '/api/wake')
+            : `${cleanBase}/api/wake`,
+        ...(secret ? { secret } : {}),
+    };
     const startedAt = new Date().toISOString();
 
     console.log(clr.dim('──────────────────────────────────────────────────────'));
@@ -456,7 +528,7 @@ async function main() {
                 records.push({ tick: n, seconds, ok: true, skipped: true });
                 console.log(`\n${clr.cyan(`[tick ${n}]`)} ${clr.yellow('⏸ paused by runner control')} ${clr.dim(`(${seconds}s)`)}`);
                 if (stopping || (maxTicks && n >= maxTicks)) break;
-                await sleepToNextBeat(intervalMs, mirror, () => stopping);
+                await sleepToNextBeat(intervalMs, mirror, () => stopping, wake);
                 if (stopping) break;
                 continue;
             }
@@ -560,7 +632,7 @@ async function main() {
         }
 
         if (stopping || (maxTicks && n >= maxTicks)) break;
-        await sleepToNextBeat(intervalMs, mirror, () => stopping);
+        await sleepToNextBeat(intervalMs, mirror, () => stopping, wake);
         if (stopping) break;
     }
     if (jsonOut) {

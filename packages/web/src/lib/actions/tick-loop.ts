@@ -48,6 +48,8 @@ import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLed
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
 import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, jealousNightPursuit, yearningNightPursuit, newWant, nightSceneKind } from '@endless-story/engine/core/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
+import { drainInterludePercepts, type PartOfDay } from '@endless-story/engine';
+import { asInterludeWorld, loadWakeState, saveFromInterludeWorld } from '@/lib/chain/wake-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
 import { recordSceneTruth } from '@/lib/chain/scene-truth';
@@ -382,6 +384,58 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         } catch (err) {
             console.warn('[tick-loop] perceive failed:', err);
         }
+    }
+
+    // 1.6 幕間匯入 (interlude, 喚醒層 P1b) — 上一個大拍以來鏈側演過的折子，在此收成
+    //     「每人一行」的世情，併進本人這一拍的處境（PERCEIVE 那一份簡報的同一條線）：
+    //     大拍**聽說**幕間發生了什麼，**不重演**它——只是 percept，不是導演指令。
+    //     同一行也帶上滯留未答的捎話（超預算或座席缺席而留下的）：捎話只會晚到，
+    //     不會失蹤。文案形制與清空語義全由引擎 `drainInterludePercepts` 決定（機制住
+    //     engine，這裡只把檔案店冒充成它要的世界面）。這一步在 tick 內，已在演繹鏈上，
+    //     單寫者不破；wake store 空時零讀零寫、行為與從前逐字相同。
+    //     只匯入**這一拍上場的人**：生產側每拍只演輪值的一批（rotated slice），沒輪到
+    //     的人那一行沒有去處，於是原封留在佇列裡等他上場的那一拍（全員上場的一拍與
+    //     「整個清空」逐字等價）。留的只限**還會上場的人**——查無此人或已謝的名字
+    //     一律清出，否則佇列永遠壓著一句沒有人聽得見的話。
+    try {
+        const wake = loadWakeState();
+        const onStage = new Set(slice.map((c) => c.id));
+        const canStillPlay = new Set(alive.map((c) => c.id));
+        const holds = (id: string) => !onStage.has(id) && canStillPlay.has(id);
+        const records = wake.interludesSinceLastTick ?? [];
+        const stale = wake.pendingStimuli ?? [];
+        const heldRecords = records.filter((r) => holds(r.characterId));
+        const heldStimuli = stale.filter((s) => holds(s.characterId));
+        if (heldRecords.length < records.length || heldStimuli.length < stale.length) {
+            const wakeWorld = asInterludeWorld(
+                {
+                    ...wake,
+                    interludesSinceLastTick: records.filter((r) => !holds(r.characterId)),
+                    pendingStimuli: stale.filter((s) => !holds(s.characterId)),
+                },
+                {
+                    sagaId: d.sagaId,
+                    clock: {
+                        currentTick: worldTime?.currentTick ?? 0,
+                        ticksPerDay: worldTime?.ticksPerDay ?? 6,
+                        day: worldTime?.day ?? 1,
+                        tickOfDay: worldTime?.tickOfDay ?? 0,
+                        partOfDay: (worldTime?.partOfDay ?? '清晨') as PartOfDay,
+                    },
+                },
+            );
+            for (const [id, line] of Object.entries(drainInterludePercepts(wakeWorld))) {
+                const prior = situationByChar.get(id);
+                situationByChar.set(id, prior ? `${prior}\n${line}` : line);
+                tlog(`◦ [幕間] ${nameById.get(id) ?? id.slice(0, 8)}：${line}`);
+            }
+            // 引擎已把上場者的兩個佇列清空；沒輪到的人原封放回去。
+            wakeWorld.data.interludesSinceLastTick = heldRecords;
+            wakeWorld.data.pendingStimuli = heldStimuli;
+            saveFromInterludeWorld(wakeWorld);
+        }
+    } catch (err) {
+        console.warn('[tick-loop] interlude drain failed:', err);
     }
 
     // 2. PLAN (N6) — update standing goals so decide/POV recall them. No Sui
