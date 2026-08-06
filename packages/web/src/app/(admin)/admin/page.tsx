@@ -1,3 +1,4 @@
+import { chineseNumber } from '@endless-story/shared/world-clock';
 import { SiteNav } from '@/components/home/SiteNav';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
@@ -41,9 +42,21 @@ export default async function AdminPage() {
                   <h2 className="flex items-center gap-1.5 font-serif text-lg tracking-wide text-ink">
                     世界時間 · 推進敘事日
                     <InfoHint>
-                      鏈上 <code className="font-mono text-2xs">WorldState.current_tick</code>{' '}
-                      是敘事時鐘。VPS 的 world-loop 每隔一段時間推進一個 tick、夜裡編公報、跨日——
-                      這格在跳，就是世界正在自行運轉的證明。
+                      {worldTime?.mode === 'mirror' ? (
+                        <>
+                          敘事時鐘是牆鐘：戲班與現實同刻而行，只早
+                          {chineseNumber(worldTime.mirror?.yearOffset ?? 100)}年。鏈上{' '}
+                          <code className="font-mono text-2xs">WorldState.current_tick</code>{' '}
+                          是演繹的心跳——VPS 的 world-loop 在每個時辰邊界打一拍、夜裡編公報、跨日。
+                          世界的時間不因停機而暫停；這格在跳，只是說戲班今日仍在搬演。
+                        </>
+                      ) : (
+                        <>
+                          鏈上 <code className="font-mono text-2xs">WorldState.current_tick</code>{' '}
+                          是敘事時鐘。VPS 的 world-loop 每隔一段時間推進一個 tick、夜裡編公報、跨日——
+                          這格在跳，就是世界正在自行運轉的證明。
+                        </>
+                      )}
                     </InfoHint>
                   </h2>
                   <div className="mt-4 flex-1">

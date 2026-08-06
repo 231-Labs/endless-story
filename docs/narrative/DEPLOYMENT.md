@@ -42,7 +42,7 @@
 |---|---|---|---|---|
 | 1 | `packages/web` | Next.js 前端 + server actions + `/api/tick` | **Zeabur → VPS**（root = `packages/web`） | 合到 `main` 即自動部署 |
 | 2 | `packages/relayer`（新增） | MemWal 自架 relayer：召回 + Walrus 上傳中繼 | **Zeabur → VPS** | 新建一個 service |
-| 3 | world-loop runner | `packages/cli/scripts/world-loop.ts`：每 N 分打 `/api/tick` | **Zeabur → VPS** | 新建一個 service（常駐 / cron） |
+| 3 | world-loop runner | `packages/cli/scripts/world-loop.ts`：每 N 分打 `/api/tick`；`ES_TIME_MODE=mirror` 時改睡到時辰邊界才打 | **Zeabur → VPS** | 新建一個 service（常駐 / cron） |
 | 3b | event-poller（新增） | `packages/cli/scripts/indexer-poll.ts`：輪詢鏈事件灌進 Postgres（`Dockerfile.event-poller`） | **Zeabur → VPS** | 新建一個 service，設 `DATABASE_URL` |
 | 3c | Postgres（新增） | 持久化 `chain_events` store；web/poller 開機 `ensureSchema` 自動建表 | **Zeabur** | 新建 Postgres，`DATABASE_URL` ref 給 web + poller |
 | 4 | `contracts/endless_story` | Sui Move 合約 | **Sui 鏈**（發一次） | `publish`，把 ids 寫進 `packages/shared/.../contract-ids.ts` |
@@ -88,6 +88,7 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 ### 3.3 world-loop runner → Zeabur（Contabo VPS）
 - 跑 `packages/cli/scripts/world-loop.ts`（`packages/cli` 也有 `pnpm start` → `world-loop`；支援 `--interval` / `--max` / `--dry-run` / `--max-characters` / `--no-pov` / `--showrunner-every` 等,序列等每 tick 完成、永不重疊）。
 - **每個 flag 都有 env fallback（`flag > env > default`）**,所以 standalone service 部署可以完全只靠 env 調參,不必傳 CLI flag：`WORLD_LOOP_INTERVAL` / `WORLD_LOOP_MAX_TICKS` / `WORLD_LOOP_MAX_CHARACTERS` / `SHOWRUNNER_EVERY_TICKS`,以及實驗閘 `TICK_*`(與 web 端同名,一份 `.env` 兩個 service 通用;runner 把它們塞進 POST body,body 只會 force ON)。完整清單見 `world-loop.ts` 檔頭。
+- **鏡像時間世界（`ES_TIME_MODE=mirror`）**：不再按固定間隔輪轉,而是**睡到下一個時辰邊界才打一拍**——UTC+8 的 05／09／13／17／21／01 時,一日六拍。冷啟動時當前時辰若未演繹補打至多一拍,絕不補歷史積壓：故事時間由牆鐘定,停機期間世界照樣活過去了。legacy `--interval` 在 tick 模式維持原狀。見 [`WORLD_TIME_MIRROR.md`](./WORLD_TIME_MIRROR.md)。
 - 它**很薄**：只是定時 HTTP 打 `WORLD_LOOP_URL`(= web 的 `/api/tick`),帶 `Authorization: Bearer <TICK_LOOP_SECRET>`。重活（LLM/Sui/MemWal）都在 `/api/tick` 內(web)執行。
 - 所以這個 service **最低只需要 `WORLD_LOOP_URL` + `TICK_LOOP_SECRET` 兩個 env**；若要遠端暫停，加 `RUNNER_CONTROL_URL=https://<relayer>/control`，或填 `MEMWAL_SERVER_URL=https://<relayer>` 讓它自動用 `/control`。
 - **進階（世界變大時）**：讓 world-loop 直接 in-process 跑 tick 邏輯(不經 Vercel),此時它才需要全套 keys（LLM/Sui/MemWal）。MVP 不用。

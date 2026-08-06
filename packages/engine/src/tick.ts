@@ -56,6 +56,7 @@ import { commitBeatPhysics } from './core/physical-canon.ts';
 import { accountFace, bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, performanceDutyLine, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
 import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple-prayer.ts';
 import { drainPendingDreams } from './core/dream.ts';
+import { drainInterludePercepts } from './interlude.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
 import { settleBackgroundNeeds } from './core/background-needs.ts';
 import {
@@ -467,6 +468,14 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // scheduled-event delivery below picks up whatever they schedule. Cadence +
     // 深宵 timing resolve against THIS clock. Empty/absent queue ⇒ no-op.
     for (const line of drainPendingDreams(world)) log(`  ${line}`);
+
+    // 0.01) 幕間匯入 (interlude) — 上一個大拍以來演過的折子，在此收成「每人一行」的
+    // 世情 percept：大拍**聽說**幕間發生了什麼，**不重演**它（只是 percept，不是導演
+    // 指令；場景層的因果由大拍管線自然接續）。同一行也帶上滯留佇列裡**未及回**的捎話
+    // ——超預算或座席缺席而留下的刺激，到大拍一律被聽見，然後清出佇列：捎話只會晚到，
+    // 不會失蹤。喚醒層沒開（兩個佇列皆空）⇒ 完全惰性，這一拍 byte-identical。
+    const interludePerceptById = drainInterludePercepts(world);
+    for (const [id, line] of Object.entries(interludePerceptById)) log(`  [幕間] ${world.nameById(id)}：${line}`);
 
     // 0) SCHEDULED WORLD EVENTS — machine-readable clocks enter objective canon
     // exactly once, before movement. They are percepts, never scripted choices.
@@ -1101,6 +1110,8 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 ...dueScheduledEvents
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => event.text),
+                // 幕間：拍與拍之間這個人身上發生過的捎話與答話（世情一行，不是指令）。
+                interludePerceptById[member.id] ?? '',
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
                 standingPerceptFor(world, member.id) ?? '',
                 ...(intrudePull ? [intrudePull] : []),

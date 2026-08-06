@@ -36,6 +36,14 @@ export interface SagaWorldTime {
   partOfDay: DayPart;
   label?: string;
   weather?: 'clear' | 'rain' | 'snow' | 'wind';
+  /** 鏡像時間世界的敘事日期（lib/world-clock 的 StoryDate 投影）；tick 世界缺省。 */
+  date?: {
+    year: number;
+    rocYear: number;
+    month: number;
+    day: number;
+    weekday: number;
+  };
 }
 
 // Revenue split in basis points; must total 10000.

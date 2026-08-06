@@ -84,6 +84,33 @@ test('ticksPerDay is clamped, and junk falls back rather than producing a broken
     }
 });
 
+test('timeMode defaults to tick — mirror must be named explicitly', () => {
+    assert.equal(normalizeRunConfig({ presetId: 'p' }).timeMode, 'tick');
+    assert.equal(normalizeRunConfig({ presetId: 'p', timeMode: 'mirror' }).timeMode, 'mirror');
+    // junk falls back to the safe default rather than accidentally opening a mirror scroll
+    assert.equal(normalizeRunConfig({ presetId: 'p', timeMode: 'nonsense' as unknown as 'mirror' }).timeMode, 'tick');
+});
+
+test('interlude 節律 always resolves to concrete numbers, clamped, junk falls back to the engine default', () => {
+    const bare = normalizeRunConfig({ presetId: 'p' }).interlude;
+    assert.deepEqual(bare, { debounceMs: 60_000, dailyBudget: 6 }, '沒給就是引擎自己的預設');
+
+    const tuned = normalizeRunConfig({ presetId: 'p', interlude: { debounceMs: 90_000, dailyBudget: 3 } }).interlude;
+    assert.deepEqual(tuned, { debounceMs: 90_000, dailyBudget: 3 });
+
+    const clampedHigh = normalizeRunConfig({ presetId: 'p', interlude: { debounceMs: 999_999_999, dailyBudget: 9999 } }).interlude;
+    assert.deepEqual(clampedHigh, { debounceMs: 600_000, dailyBudget: 50 }, '離譜的大數夾到上限，不是拒絕');
+
+    const clampedLow = normalizeRunConfig({ presetId: 'p', interlude: { debounceMs: 1, dailyBudget: -5 } }).interlude;
+    assert.deepEqual(clampedLow, { debounceMs: 5_000, dailyBudget: 6 }, '過小的 debounce 夾到下限；負預算不是合法值，回落預設');
+
+    const zeroBudget = normalizeRunConfig({ presetId: 'p', interlude: { dailyBudget: 0 } }).interlude;
+    assert.deepEqual(zeroBudget, { debounceMs: 60_000, dailyBudget: 0 }, '0 是合法值（等同關掉喚醒層），不可被 junk 規則吃掉');
+
+    const junk = normalizeRunConfig({ presetId: 'p', interlude: { debounceMs: NaN, dailyBudget: 2.5 } }).interlude;
+    assert.deepEqual(junk, { debounceMs: 60_000, dailyBudget: 6 }, '非數字／非整數回落預設，不是半殘物件');
+});
+
 test('EVERY config field survives the request — this is the seam that broke', () => {
     // A fully-populated config, then the assertion that matters: the normaliser's
     // output has a key for every key the input had. Add a field to LabRunConfig,
@@ -104,6 +131,8 @@ test('EVERY config field survives the request — this is the seam that broke', 
         quietPresence: true,
         ticksPerDay: 8,
         realEmbeddings: true,
+        timeMode: 'mirror',
+        interlude: { debounceMs: 90_000, dailyBudget: 3 },
     };
 
     const config = normalizeRunConfig(full);

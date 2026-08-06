@@ -21,6 +21,7 @@ import type { SceneAgent } from './core/scene-loop.ts';
 import type { RegenerateWantInput, RewriteLedgerInput, RewriteReply, RewriteSpawn } from './core/want-rewrite.ts';
 import type { WantSemanticTag, WantSource, WantSubjectRef } from './core/want-core.ts';
 import type * as Runner from '@endless-story/runner';
+import { PARTS_OF_DAY, type PartOfDay } from '@endless-story/shared/world-clock';
 
 // ── Re-used runner authorship shapes (type-only) ─────────────────────────────
 export type DeriveWantsInput = Runner.characterAgent.DeriveWantsInput;
@@ -430,6 +431,57 @@ export interface PlanDayReply {
     planText: string;
 }
 
+// ── 折子 (interlude): 拍與拍之間，外來刺激喚起的單角色有界演繹 ────────────────
+/** 一則外來刺激 —— 東家留言、實驗者戳世界、（P1b）鏈上事件映射而來。純資料，
+ *  排在 `WorldData.pendingStimuli` 佇列裡等著被合併成一次折子。 */
+export interface InterludeStimulus {
+    id: string;
+    characterId: string;
+    /** P1：'poke'（實驗者戳）| 'note'（留言）；P2 加 'intent'（起念——**自己先前
+     *  捎給此刻的一句話**，到點由 `collectDueIntents` 轉成刺激入佇列，走折子全套
+     *  既有閘門，不另造第二套機制）；P1b 鏈側三源再擴。 */
+    kind: 'poke' | 'note' | 'intent';
+    text: string;
+    atRealMs: number;
+}
+
+/** 折子座席收到的全部所見：此人、此刻、debounce 窗內合併的全部捎話。
+ *  受限動詞集——聽見／回話／記下心事，不開場景、不 weave、不判官。 */
+export interface InterludeInput {
+    characterId: string;
+    name: string;
+    /** debounce 窗內合併後的全部刺激。 */
+    stimuli: InterludeStimulus[];
+    clock: WorldClock;
+    /** mirror 世界的日期標籤（民國十五年八月五日）；tick 世界缺省。 */
+    dateLabel?: string;
+    /** 行當節律「此刻本該在哪」一行（有則附）。 */
+    activityHint?: string;
+    /** 座席側解析持久 session 身分用（key = sagaId + characterId，canon 取 persona）。
+     *  引擎有就給；缺席時真座席退回無 session 的單輪，機制不變。 */
+    sagaId?: string;
+    persona?: string;
+}
+
+export interface InterludeReply {
+    /** 聽見後的一句回應（可含動作記述）。 */
+    response: string;
+    /** 選配：記一筆心事（入長期記憶）。 */
+    memoryNote?: string;
+    /** 起念（P2）—— 座席在折子裡替自己記一樁「稍後要辦的事」：**自己捎話給未來的
+     *  自己**。座席不必自律，約束一律由引擎執行（`runInterludes`）：
+     *   · **僅 `agency === 'principal'`（台柱）生效**——班底的 followUp 逕行忽略；
+     *   · `inMinutes` 夾 [15, 1440]（非數逕行忽略）；`note` 取前 40 字；
+     *   · **每人至多一枚在途**（新的換舊的——人會改主意）。
+     *  存進 `WorldData.pendingIntents`，到點轉成 `kind: 'intent'` 的刺激。 */
+    followUp?: { inMinutes: number; note: string };
+    /** 輕量 activity（P2）—— 「我此刻正做著一件要花時間的事」：agent 對行當節律
+     *  （零 LLM 的預設行程）的**明示覆寫**。約束同樣由引擎執行：`what` 取前 20 字
+     *  （空則忽略）、`forMinutes` 夾 [10, 360]、缺席預設 60。不限 tier（班底被捎話
+     *  時也可自陳在做什麼）；過期自然失效，不另清。 */
+    activity?: { what: string; forMinutes?: number };
+}
+
 /** NIGHTLY 心事自改 input — the unspoken matter and what LANDED on it today. */
 export interface EvolveSecretInput {
     name: string;
@@ -592,6 +644,12 @@ export interface SceneAgentPort extends SceneAgent {
      *  implement it (one cheap LLM call); deterministic/fake adapters omit it, and
      *  the tick simply skips planning. null → keep the prior plan. */
     planDay?(input: PlanDayInput): Promise<PlanDayReply | null>;
+    /** 折子座席 (optional): 拍與拍之間，外來捎話送到某個不在場上的人跟前——他聽見了，
+     *  回一句，或許記一筆心事。一次有界演繹，動詞集受限（不開場景、不拉別人進戲）。
+     *  Real adapters implement it (per-character session 一輪); 缺席的座席（fake 以外
+     *  的舊 adapter）不實作，佇列裡的捎話便原封留給下一個大拍聽見——喚醒層是純增量，
+     *  關掉即回到六拍世界。null → 這一輪沒答上，同樣留給大拍。 */
+    interlude?(input: InterludeInput): Promise<InterludeReply | null>;
     /** Optional: PROSE of an audience member's reaction (never the box-office number). */
     audienceReaction?(input: AudienceReactionInput): Promise<string | null>;
     /** SELF-CHECK / REPAIR: re-read a rendered scene and return the same beats with
@@ -698,9 +756,10 @@ export interface ArchivePort {
 }
 
 // ── Clock ────────────────────────────────────────────────────────────────────
-/** The 6-part day palette (§ world-time). Night = the last two. */
-export const PARTS_OF_DAY = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
-export type PartOfDay = (typeof PARTS_OF_DAY)[number];
+/** The 6-part day palette (§ world-time). Night = the last two. Canonical home
+ *  is shared/lib/world-clock (single source across engine/runner/web);
+ *  re-exported here so the engine's public API is unchanged. */
+export { PARTS_OF_DAY, type PartOfDay };
 
 export interface WorldClock {
     /** Monotonic tick counter (the single source of truth). */

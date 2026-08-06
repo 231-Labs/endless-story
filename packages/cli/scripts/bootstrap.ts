@@ -241,6 +241,15 @@ async function main() {
     console.log(
       `   time      ${story.world.time_config.days_per_tick_bp}bp · ${story.world.time_config.tick_interval_ms}ms`,
     );
+    // mode / year_offset / tz stay off-chain (worldview constants) — only the
+    // heartbeat rhythm above is written on-chain. Surface the choice here so a
+    // mirror bootstrap can't be mistaken for a fast tick world.
+    if (story.world.time_config.mode === 'mirror') {
+      const years = story.world.time_config.year_offset ?? 100;
+      console.log(
+        `   曆法      鏡像時間世界：一日六拍、每拍四小時，敘事時刻＝真實時刻−${years} 年`,
+      );
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════

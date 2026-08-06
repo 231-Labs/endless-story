@@ -3,10 +3,19 @@
 /**
  * World time — read snapshot + admin-signed tick advance.
  *
- * `WorldState.current_tick` is the chain-canonical narrative clock. The
- * admin keypair holds the World AdminCap, so advancing is a server
- * action (no wallet sign). Day / part-of-day are derived from the tick
- * + `days_per_tick_bp` (basis-points rhythm).
+ * 兩種時間權威（法則見 docs/narrative/WORLD_TIME_MIRROR.md）：
+ *
+ * - `tick`    舊制。`WorldState.current_tick` 就是時間本身，day 與時辰由
+ *             tick 數 + `days_per_tick_bp` 推導。
+ * - `mirror`  鏡像時間。牆鐘是時間之源，tick 降為「演繹的心跳」——世界的
+ *             角色獲准行動的那一刻，不是時間的流逝本身。
+ *
+ * 快照形狀在兩模式下同構：`ticksPerDay === 6`、`tickOfDay` 即日內拍位
+ * （mirror 之下等於時辰 bucket index），故下游的疲勞曲線、夜測、day-start
+ * 與 gazette 閘門一行語義都不必改。法則本身只住在
+ * `@endless-story/shared/world-clock`；這裡只做鏈讀與模式分歧。
+ *
+ * 推進 tick 仍是 server action：admin keypair 持 World AdminCap，不經錢包。
  */
 
 import { Transaction } from '@mysten/sui/transactions';
@@ -15,14 +24,24 @@ import {
     read,
     tx as endlessTx,
 } from '@endless-story/sdk';
+import {
+    DEFAULT_DAYS_PER_TICK_BP,
+    PARTS_OF_DAY,
+    formatStoryDate,
+    formatStoryDateIso,
+    isNightPart,
+    resolveWorldClockConfig,
+    storyDayIndex,
+    storyNow,
+    tickDerivedDay,
+    tickOfDay as deriveTickOfDay,
+    tickPartOfDay,
+    ticksPerDay as deriveTicksPerDay,
+    type MirrorTimeConfig,
+    type StoryDate,
+    type WorldTimeMode,
+} from '@endless-story/shared/world-clock';
 import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
-
-const BP_DENOM = 10_000;
-const PARTS_OF_DAY = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
-/** The night buckets — when characters sleep / consolidate (REFLECT step). Kept beside
- *  PARTS_OF_DAY so the night test stays anchored to the actual labels and can't drift
- *  against an external literal. */
-const NIGHT_PARTS: ReadonlySet<string> = new Set(['入夜', '深宵']);
 
 export interface WorldTimeSnapshot {
     currentTick: number;
@@ -36,6 +55,20 @@ export interface WorldTimeSnapshot {
      *  the whole nightly consolidation step. */
     isNight: boolean;
     tickOfDay: number;
+    /** 時間權威：'tick' 由鏈上心跳推導，'mirror' 由牆鐘投影。 */
+    mode: WorldTimeMode;
+    /** 以下欄位僅 mirror 模式填寫（tick 世界無曆可言）。 */
+    date?: StoryDate;
+    /** 「民國十五年八月五日」。 */
+    dateLabel?: string;
+    /** 「1926-08-05」——tooltip／鍵值用。 */
+    dateLabelIso?: string;
+    /** 民用時刻「14:35」（補零）。 */
+    clockHm?: string;
+    /** 真十二地支加刻「未時三刻」。 */
+    shichen?: string;
+    /** 交給 client 時鐘元件自行走秒用的設定。 */
+    mirror?: MirrorTimeConfig;
 }
 
 export interface AdvanceTickResult {
@@ -45,46 +78,93 @@ export interface AdvanceTickResult {
     error?: string;
 }
 
-function ticksPerDay(bp: number): number {
-    if (!Number.isFinite(bp) || bp <= 0) return 1;
-    return Math.max(1, Math.round(BP_DENOM / bp));
-}
-
-function deriveSnapshot(currentTick: number, daysPerTickBp: number): WorldTimeSnapshot {
-    const perDay = ticksPerDay(daysPerTickBp);
-    const tickOfDay = ((currentTick % perDay) + perDay) % perDay;
-    const idx = Math.min(
-        Math.floor((tickOfDay / perDay) * PARTS_OF_DAY.length),
-        PARTS_OF_DAY.length - 1,
-    );
-    const partOfDay = PARTS_OF_DAY[idx];
+function deriveTickSnapshot(currentTick: number, daysPerTickBp: number): WorldTimeSnapshot {
+    const partOfDay = tickPartOfDay(currentTick, daysPerTickBp);
     return {
         currentTick,
         daysPerTickBp,
-        ticksPerDay: perDay,
-        day: Math.floor((currentTick * daysPerTickBp) / BP_DENOM) + 1,
+        ticksPerDay: deriveTicksPerDay(daysPerTickBp),
+        day: tickDerivedDay(currentTick, daysPerTickBp),
         partOfDay,
-        isNight: NIGHT_PARTS.has(partOfDay),
-        tickOfDay,
+        isNight: isNightPart(partOfDay),
+        tickOfDay: deriveTickOfDay(currentTick, daysPerTickBp),
+        mode: 'tick',
+    };
+}
+
+/** 牆鐘投影。`currentTick` 只是心跳計數，不參與任何時間推導。 */
+function deriveMirrorSnapshot(args: {
+    currentTick: number;
+    daysPerTickBp: number;
+    /** 世界創世真實毫秒（`WorldState.created_at_ms`）——日序的 epoch。 */
+    createdAtMs: number;
+    mirror: MirrorTimeConfig;
+    nowMs?: number;
+}): WorldTimeSnapshot {
+    const nowMs = args.nowMs ?? Date.now();
+    const m = storyNow(nowMs, args.mirror);
+    const hh = String(m.hour).padStart(2, '0');
+    const mm = String(m.minute).padStart(2, '0');
+    return {
+        currentTick: args.currentTick,
+        daysPerTickBp: args.daysPerTickBp,
+        // 六拍語義原封不動：一日六時辰，tickOfDay 即 bucket index。
+        ticksPerDay: PARTS_OF_DAY.length,
+        day: storyDayIndex(nowMs, args.createdAtMs, args.mirror),
+        partOfDay: m.partOfDay,
+        isNight: m.isNight,
+        tickOfDay: m.partIndex,
+        mode: 'mirror',
+        date: m.date,
+        dateLabel: formatStoryDate(m.date),
+        dateLabelIso: formatStoryDateIso(m.date),
+        clockHm: `${hh}:${mm}`,
+        shichen: m.shichen,
+        mirror: args.mirror,
     };
 }
 
 export async function getWorldTimeSnapshot(): Promise<WorldTimeSnapshot | null> {
     const d = ENDLESS_STORY_DEPLOYMENT;
+    // worldId 缺席才是真正的 null：世界尚未存在，連曆都無從談起。
     if (!d.worldId) return null;
     try {
         const admin = getAdminContext();
         const res = await read.world.getWorld(admin.client, d.worldId);
         const json = res.json as unknown as {
-            state?: { current_tick?: number | string };
-            time_config?: { days_per_tick_bp?: number | string };
+            state?: { current_tick?: number | string; created_at_ms?: number | string };
+            time_config?: {
+                days_per_tick_bp?: number | string;
+                tick_interval_ms?: number | string;
+            };
         };
         const currentTick = Number(json.state?.current_tick ?? 0);
-        const bp = Number(json.time_config?.days_per_tick_bp ?? 1670) || 1670;
-        return deriveSnapshot(currentTick, bp);
+        const bp = Number(json.time_config?.days_per_tick_bp ?? DEFAULT_DAYS_PER_TICK_BP)
+            || DEFAULT_DAYS_PER_TICK_BP;
+        const tickIntervalMs = Number(json.time_config?.tick_interval_ms ?? 0) || undefined;
+        const cfg = resolveWorldClockConfig(process.env, tickIntervalMs);
+        if (cfg.mode === 'tick') return deriveTickSnapshot(currentTick, bp);
+        // created_at_ms 讀不到時退回「此刻創世」，日序自 1 起——寧可日序偏，
+        // 不可整個時間層停擺。
+        const createdAtMs = Number(json.state?.created_at_ms ?? 0) || Date.now();
+        return deriveMirrorSnapshot({
+            currentTick,
+            daysPerTickBp: bp,
+            createdAtMs,
+            mirror: cfg.mirror,
+        });
     } catch (err) {
         console.warn('[world-time] getWorldTimeSnapshot failed:', err);
-        return null;
+        // 鏡像之下時間不依賴鏈：鏈讀失敗只讓心跳數未知（記 0），「現在幾時」
+        // 照樣答得出來。模式須由 env 明示——沒有鏈上心跳間隔就無從推斷。
+        const cfg = resolveWorldClockConfig(process.env);
+        if (cfg.mode === 'tick') return null;
+        return deriveMirrorSnapshot({
+            currentTick: 0,
+            daysPerTickBp: DEFAULT_DAYS_PER_TICK_BP,
+            createdAtMs: Date.now(),
+            mirror: cfg.mirror,
+        });
     }
 }
 

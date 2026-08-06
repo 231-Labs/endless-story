@@ -13,8 +13,24 @@
  * Tick phase order:
  *   PLAN → MOVE → DRAMA → SOCIAL → ACT → POV → SLEEP → GAZETTE
  *
+ * Mirror scheduling (docs/narrative/WORLD_TIME_MIRROR.md): when the world runs
+ * on mirror time (`ES_TIME_MODE=mirror`, or `--mirror`), a tick is no longer a
+ * unit of time — it's the heartbeat that lets the cast act inside the current
+ * 時辰. So the loop stops sleeping a fixed interval and instead sleeps to the
+ * next 時辰 boundary (UTC+8 05/09/13/17/21/01), six beats a day. Cold start
+ * fires one beat immediately for the 時辰 already underway, then falls into
+ * boundary scheduling — never a backlog of catch-up ticks: the world lived
+ * through the downtime, nobody was there to perform it.
+ *
+ * 喚醒層 (docs/narrative/AGENT_WAKE_LAYER.md)：拍與拍之間的等待裡，每 ~2 分鐘
+ * POST 一次 /api/wake {drain:true} —— 東家的一句留言不必等到下一個時辰才被聽見。
+ * 巡佇列與大拍共用服務端同一條演繹鏈，撞上進行中的大拍就等它；沒有捎話待答時
+ * 這一巡零成本，世界照舊只有六拍。
+ *
  * Flags:
- *   --interval=<seconds>   gap between ticks (default 60)
+ *   --mirror               sleep to the next 時辰 boundary instead of --interval
+ *                          (env fallback: ES_TIME_MODE=mirror)
+ *   --interval=<seconds>   gap between ticks (default 60; legacy tick mode)
  *   --max=<n>              stop after n ticks (default 0 = run forever)
  *   --dry-run              preview tick output; no advance / chain or memory writes
  *   --max-characters=<n>   cap characters per tick (default server-side)
@@ -66,6 +82,13 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Agent } from 'undici';
+import {
+    formatStoryDate,
+    nextBucketBoundaryMs,
+    resolveWorldClockConfig,
+    storyNow,
+    type MirrorTimeConfig,
+} from '@endless-story/shared/world-clock';
 
 /** A full tick (plans + beats + POVs + anchoring) can legitimately run past
  *  undici's 300s default headers timeout; give it real headroom. */
@@ -97,6 +120,8 @@ interface LoopOpts {
     jsonOut?: string;
     /** Run a Showrunner heartbeat after every n ticks (0 = off). */
     showrunnerEvery: number;
+    /** Set when the world runs on mirror time: sleep to 時辰 boundaries, not intervalMs. */
+    mirror?: MirrorTimeConfig;
 }
 
 /** '1' / 'true' / 'yes' / 'on' — same semantics as the web-side TICK_* gates. */
@@ -154,6 +179,9 @@ function parseArgs(argv: string[]): LoopOpts {
     if (has('arc-convergence') || envFlag('TICK_ARC_CONVERGENCE')) input.arcConvergence = true; // §4d.2: arc convergence state machine
     if (has('pov-all')) input.povAll = true; // force a chapter for every processed character (no env fallback)
     const showrunnerEvery = Number(get('showrunner-every') ?? process.env.SHOWRUNNER_EVERY_TICKS ?? 0);
+    // 曆法由 env 明示（或 --mirror 強制）。排程器讀不到鏈；未明示時先走 legacy
+    // interval，首拍回應若自述 mirror（worldTime.mode）即改採時辰邊界排程。
+    const clock = resolveWorldClockConfig(has('mirror') ? { ...process.env, ES_TIME_MODE: 'mirror' } : process.env);
 
     return {
         intervalMs: Math.max(5, Number.isFinite(interval) ? interval : 60) * 1000,
@@ -161,6 +189,7 @@ function parseArgs(argv: string[]): LoopOpts {
         input,
         jsonOut,
         showrunnerEvery: Number.isFinite(showrunnerEvery) && showrunnerEvery > 0 ? Math.floor(showrunnerEvery) : 0,
+        mirror: clock.mode === 'mirror' ? clock.mirror : undefined,
     };
 }
 
@@ -208,10 +237,99 @@ async function runShowrunnerBeat(url: string, secret?: string): Promise<void> {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+/** 拍與拍之間巡一次折子佇列的間隔（喚醒層 P1b）。兩分鐘：東家戳完到聽見的體感是
+ *  「幾分鐘內」，而不是「下一拍」（時辰邊界一等就是幾小時）。 */
+const WAKE_DRAIN_INTERVAL_MS = 120_000;
+
+interface WakeDrainResult {
+    ok?: boolean;
+    played?: number;
+    reason?: string;
+    error?: string;
+}
+
+/**
+ * POST 一次巡佇列：到期的起念轉成刺激，due 的捎話演成折子（機制全在服務端）。
+ *
+ * 容錯照 `runShowrunnerBeat` 的模板——絕不拋、絕不擋住下一拍：世界沒就緒、
+ * 座席失手、連線斷了，佇列都原封留著，下一巡或下一個大拍照樣聽得見。
+ * 沒演成一折就一個字都不打（每兩分鐘一行「0 折」只會淹掉真正的世情）。
+ */
+async function runWakeDrain(url: string, secret?: string): Promise<void> {
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                ...(secret ? { authorization: `Bearer ${secret}` } : {}),
+            },
+            body: JSON.stringify({ drain: true }),
+            // 一折是短演繹（服務端 maxDuration 60s）；斷在這裡也只是這一巡沒巡成，
+            // 但**絕不能**讓一個掛住的連線壓著整段拍間等待不放。
+            signal: AbortSignal.timeout(90_000),
+        });
+        let json: WakeDrainResult | null = null;
+        try {
+            json = (await res.json()) as WakeDrainResult;
+        } catch {
+            /* non-JSON handled below */
+        }
+        if (!res.ok) {
+            console.warn(`${clr.red('[wake] ✗')} HTTP ${res.status}${json?.error ? ` — ${json.error}` : ''}`);
+            return;
+        }
+        const played = json?.played ?? 0;
+        if (played > 0) console.log(`${clr.green('[wake] ✓')} 幕間演了 ${clr.bold(`${played} 折`)}`);
+    } catch (err) {
+        console.warn(`${clr.red('[wake] ✗')} ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
+/**
+ * Sleep until the next beat. Mirror worlds wait for the next 時辰 boundary
+ * (so a tick always lands at the top of a 時辰); legacy worlds wait intervalMs.
+ *
+ * 時辰邊界一等就是幾小時，所以等待切成小段輪詢 `shouldStop`——
+ * 否則 Ctrl-C 之後這裡會壓著不放，還白打一拍才收。
+ *
+ * 這段等待正是折子的活動範圍：每 ~2 分鐘 POST 一次 `/api/wake {drain:true}`
+ * （喚醒層 P1b）。巡佇列與大拍共用服務端的同一條演繹鏈，撞上進行中的大拍就等它，
+ * 所以在這裡呼是安全的；`wake` 缺席（未給 url）則整段行為與從前逐字相同。
+ */
+async function sleepToNextBeat(
+    intervalMs: number,
+    mirror: MirrorTimeConfig | undefined,
+    shouldStop: () => boolean,
+    wake?: { url: string; secret?: string },
+): Promise<void> {
+    let untilMs: number;
+    if (mirror) {
+        untilMs = nextBucketBoundaryMs(Date.now(), mirror);
+        const at = storyNow(untilMs, mirror);
+        const mins = Math.round((untilMs - Date.now()) / 60_000);
+        console.log(
+            `${clr.dim('[world-loop]')} 下一拍：${clr.bold(hhmm(at.hour, at.minute))} ${clr.dim(`（${at.partOfDay}）· ${mins} 分後`)}`,
+        );
+    } else {
+        untilMs = Date.now() + intervalMs;
+    }
+    let nextDrainMs = Date.now() + WAKE_DRAIN_INTERVAL_MS;
+    while (Date.now() < untilMs && !shouldStop()) {
+        await sleep(Math.min(1000, untilMs - Date.now()));
+        if (wake && Date.now() >= nextDrainMs && !shouldStop()) {
+            await runWakeDrain(wake.url, wake.secret);
+            // 巡一次可能花上十幾秒（真座席在答話）——間隔從**收工那一刻**起算。
+            nextDrainMs = Date.now() + WAKE_DRAIN_INTERVAL_MS;
+        }
+    }
+}
+
 interface TickResult {
     ok?: boolean;
     advanced?: boolean;
-    worldTime?: { day?: number; partOfDay?: string };
+    worldTime?: { day?: number; partOfDay?: string; mode?: string; dateLabel?: string };
     plans?: unknown[];
     moves?: { ok: boolean; toSceneId?: string }[];
     drama?: {
@@ -260,7 +378,9 @@ function summarize(r: TickResult): string {
         (arr ?? []).filter((x) => x.anchored).length;
     const chapters = (arr?: { ok?: boolean; anchored?: boolean }[]) =>
         (arr ?? []).filter((x) => x.ok || x.anchored).length;
-    const day = r.worldTime?.day != null ? `Day ${r.worldTime.day} · ${r.worldTime.partOfDay}` : '—';
+    const day = r.worldTime?.dateLabel
+        ? `${r.worldTime.dateLabel} · ${r.worldTime.partOfDay}`
+        : r.worldTime?.day != null ? `Day ${r.worldTime.day} · ${r.worldTime.partOfDay}` : '—';
     const drama = r.drama?.active
         ? `tension ${r.drama.resourceCount ?? 0}${r.drama.commitmentId ? '⛓' : ''}`
         : null;
@@ -337,7 +457,10 @@ async function readRunnerPaused(controlUrl: string, secret?: string): Promise<{
 }
 
 async function main() {
-    const { intervalMs, maxTicks, input, jsonOut, showrunnerEvery } = parseArgs(process.argv.slice(2));
+    const opts = parseArgs(process.argv.slice(2));
+    const { intervalMs, maxTicks, input, jsonOut, showrunnerEvery } = opts;
+    // mutable：首拍回應自述 mirror 時，當場升級為時辰邊界排程。
+    let mirror = opts.mirror;
     const base = process.env.WORLD_LOOP_URL ?? 'http://localhost:3000';
     const secret = process.env.TICK_LOOP_SECRET;
     const controlUrl = resolveControlUrl();
@@ -347,16 +470,36 @@ async function main() {
     const showrunnerUrl = cleanBase.endsWith('/api/tick')
         ? cleanBase.replace(/\/api\/tick$/, '/api/showrunner')
         : `${cleanBase}/api/showrunner`;
+    // 折子巡佇列（喚醒層 P1b）——與大拍同一個服務、同一把 secret。
+    const wake = {
+        url: cleanBase.endsWith('/api/tick')
+            ? cleanBase.replace(/\/api\/tick$/, '/api/wake')
+            : `${cleanBase}/api/wake`,
+        ...(secret ? { secret } : {}),
+    };
     const startedAt = new Date().toISOString();
 
     console.log(clr.dim('──────────────────────────────────────────────────────'));
     console.log(`   ${clr.bold(clr.cyan('ENDLESS STORY'))} ${clr.dim('· world-loop')}`);
     console.log(clr.dim('   autonomous narrative engine — the saga lives, one tick at a time'));
     console.log(clr.dim('──────────────────────────────────────────────────────'));
-    console.log(
-        `${clr.dim('[world-loop]')} driving ${url} every ${clr.bold(`${intervalMs / 1000}s`)}` +
-            (maxTicks ? ` ${clr.dim(`(max ${maxTicks} ticks)`)}` : clr.dim(' (forever — Ctrl-C to stop)')),
-    );
+    if (mirror) {
+        // 冷啟動先為「已經在走的這個時辰」補打一拍，再進入邊界排程；絕不補歷史積壓。
+        const now = storyNow(Date.now(), mirror);
+        console.log(
+            `${clr.dim('[world-loop]')} driving ${url} ${clr.bold('鏡像時間')}${clr.dim('（一日六拍，打在時辰邊界）')}` +
+                (maxTicks ? ` ${clr.dim(`(max ${maxTicks} ticks)`)}` : clr.dim(' (forever — Ctrl-C to stop)')),
+        );
+        console.log(
+            `${clr.dim('[world-loop]')} 此刻 ${clr.bold(formatStoryDate(now.date))} ${clr.bold(hhmm(now.hour, now.minute))} ` +
+                clr.dim(`（${now.partOfDay} · ${now.shichen}）—— 先為當前時辰補打一拍`),
+        );
+    } else {
+        console.log(
+            `${clr.dim('[world-loop]')} driving ${url} every ${clr.bold(`${intervalMs / 1000}s`)}` +
+                (maxTicks ? ` ${clr.dim(`(max ${maxTicks} ticks)`)}` : clr.dim(' (forever — Ctrl-C to stop)')),
+        );
+    }
     if (Object.keys(input).length) console.log(`[world-loop] phase overrides:`, input);
     if (controlUrl) console.log(`[world-loop] control ${controlUrl}`);
     if (showrunnerEvery > 0) {
@@ -385,7 +528,8 @@ async function main() {
                 records.push({ tick: n, seconds, ok: true, skipped: true });
                 console.log(`\n${clr.cyan(`[tick ${n}]`)} ${clr.yellow('⏸ paused by runner control')} ${clr.dim(`(${seconds}s)`)}`);
                 if (stopping || (maxTicks && n >= maxTicks)) break;
-                await sleep(intervalMs);
+                await sleepToNextBeat(intervalMs, mirror, () => stopping, wake);
+                if (stopping) break;
                 continue;
             }
         }
@@ -461,6 +605,12 @@ async function main() {
                 });
                 console.log(`${clr.cyan(`[tick ${n}]`)} ${json.ok === false ? clr.red('✗') : clr.green('✓')} ${summarize(json)} ${clr.dim(`(${secs}s)`)}`);
                 for (const line of detailLines(json)) console.log(line);
+                // 世界自述曆法：tick 回應說 mirror 而排程器還在 legacy interval，
+                // 當場改採時辰邊界——毋須任何人記得在 loop 環境設 ES_TIME_MODE。
+                if (!mirror && json.worldTime?.mode === 'mirror') {
+                    mirror = resolveWorldClockConfig({ ...process.env, ES_TIME_MODE: 'mirror' }).mirror;
+                    console.log(`${clr.dim('[world-loop]')} 世界走${clr.bold('鏡像時間')}——改為時辰邊界排程（一日六拍）`);
+                }
             }
         } catch (err) {
             clearInterval(heartbeat);
@@ -482,7 +632,8 @@ async function main() {
         }
 
         if (stopping || (maxTicks && n >= maxTicks)) break;
-        await sleep(intervalMs);
+        await sleepToNextBeat(intervalMs, mirror, () => stopping, wake);
+        if (stopping) break;
     }
     if (jsonOut) {
         const outPath = path.resolve(process.cwd(), jsonOut);

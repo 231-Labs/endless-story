@@ -118,6 +118,13 @@ export interface CastMember {
      *  box-office (滿座長臉、停鑼折面子). Optional & backward-compatible: absent ⇒ a
      *  neutral baseline (`renownOf` ⇒ 0.5). Plain JSON, carried by snapshot/restore. */
     renown?: number;
+    /** 台柱／班底 (agency tier, 喚醒層 P2) — 這個人有沒有**自己起念**的份。
+     *  `'principal'`（台柱，初期 2–4 人）可在折子裡替自己排一樁稍後要辦的事
+     *  （`InterludeReply.followUp`）；`'ensemble'`（班底）不能——他們仍被捎話、
+     *  仍上大拍、仍能自陳 activity，只是不會自己給自己安排未來。
+     *  **缺席 ⇒ 'ensemble'：惰性是預設，台柱要點名**——沒點到名的人一毛成本
+     *  也不生，舊卷與舊種子照原樣讀。Plain JSON, carried by snapshot/restore. */
+    agency?: 'principal' | 'ensemble';
     /** 自視・自估 (self-regard) — how this person PRIVATELY rates their OWN standing,
      *  0..1. It may DIVERGE from `renown`: a 當紅卻怕不夠好 star carries high renown
      *  and low self-regard; a nobody may think the world owes them their due. Only
@@ -657,6 +664,35 @@ export interface WorldStateData {
     /** 生命體徵滾動窗 — the last few ticks' externalised material, for the loop
      *  detector. Diagnostic only: nothing in the engine branches on it. */
     vitalsWindow?: Array<{ day: number; tick: number; samples: import('./core/vitals.ts').VitalsSample[] }>;
+
+    // ── 折子層 (interlude / 喚醒層 P1) — 三個欄位都是選配且向後相容：全缺席 ⇒ 世界
+    //    只剩六拍大拍，byte-identical to a run predating the layer（預算設 0 亦然）。
+    //    Plain JSON, so snapshot/restore carries them round-trip untouched.
+
+    /** 待答的外來刺激佇列（東家留言／戳世界／鏈事件）。`runInterludes` 按角色分組
+     *  取用：成局者移出，未滿齡／超預算／座席缺席者**留在原處**等下一次巡或下一個
+     *  大拍——刺激只會被聽見，永遠不被丟棄。 */
+    pendingStimuli?: import('./ports.ts').InterludeStimulus[];
+    /** 折子預算帳：characterId → 當日已演的折子數。`day` 一變即歸零（不必清帳），
+     *  所以這張表最多與 cast 同大小，不隨日子增長。 */
+    interludeLedger?: Record<string, { day: number; count: number }>;
+    /** 上一個大拍以來演過的折子。拍首 drain 成一行世情 percept 後清空——大拍
+     *  **聽說**折子，不重演它。 */
+    interludesSinceLastTick?: import('./interlude.ts').InterludeRecord[];
+
+    // ── 起念與活動 (喚醒層 P2) — 同樣只加不改：兩欄全缺席 ⇒ 世界與 P1 完全一致。
+
+    /** 起念佇列 —— 角色**捎給未來自己的話**。台柱在折子裡立下一枚（`followUp`），
+     *  到期由 `collectDueIntents` 移出、轉成 `kind: 'intent'` 的刺激推進
+     *  `pendingStimuli`，之後走折子全套既有閘門（預算、單寫者、落款、拍首兜底）
+     *  ——起念沒有第二套機制。每人至多一枚在途（新的換舊的），所以這張表最多與
+     *  台柱同大小，不隨日子增長。 */
+    pendingIntents?: Array<{ id: string; characterId: string; dueRealMs: number; note: string }>;
+    /** 在做的事 —— characterId → 一段有起訖的活動（「排戲」14:10–16:30）。這是
+     *  agent 對行當節律的**明示覆寫**：在期者（`endRealMs > nowMs`）優先於呼叫端
+     *  給的 `activityHint`（節律是零 LLM 的預設行程，見設計稿 §六之四）。過期
+     *  自然失效——不另設清理，讀的人自己比時刻。 */
+    activityByChar?: Record<string, { what: string; startRealMs: number; endRealMs: number }>;
 }
 
 /**

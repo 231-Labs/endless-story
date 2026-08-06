@@ -14,13 +14,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { bondOf, PARTS_OF_DAY, PRODUCTION, standingBoard, totalEffort, WorldState, type ProductionStatus, type RawPreset } from '@endless-story/engine';
 import type { DayPart, Saga, SagaLocation, Scene } from '@endless-story/shared';
+import { SPRING_SNOW_MIRROR, formatStoryDate, storyDateOfDayIndex } from '@endless-story/shared/world-clock';
 import { labManager } from './manager';
 import { runDir } from './paths';
 import { readRunMeta } from './store';
 import { readSeedRaw } from './seeds';
 import { assetNoteFor, assetUrlFor, listGallery } from './assets';
-import { beatsFromTickRecords, listArchiveEntries, readArchiveEntry, tailTickRecords } from './artifacts';
-import type { LabCharacterLive, LabLiveBeat, LabPrayer, LabRunMeta, LabRunPhase, LabSceneObject, LabTickRecord } from './types';
+import { beatsFromTickRecords, listArchiveEntries, readArchiveEntry, tailInterludeRecords, tailTickRecords } from './artifacts';
+import type { LabCharacterLive, LabInterludeLive, LabLiveBeat, LabPrayer, LabRunMeta, LabRunPhase, LabSceneObject, LabTickRecord } from './types';
 
 /** The chain-only preset fields the engine ignores but the handscroll wants. */
 interface RawPresetView extends RawPreset {
@@ -81,6 +82,20 @@ export interface LabLiveSnapshot {
      *  no external-push layer has nothing to show here, and an empty panel would
      *  read as「壞了」rather than as「這一卷沒掛牌組」. */
     pressure?: LabPressureLive;
+    /** 時間法則——'tick'（排演拍，多數卷）或 'mirror'（鏡像時間）。 */
+    timeMode: 'tick' | 'mirror';
+    /** 「民國十五年八月五日」——mirror 卷才有，由 clock.day 推得（顯示層投影，
+     *  不取樣牆鐘；鐘面的即時走秒交給 `StoryClock` 元件自己）。 */
+    dateLabel?: string;
+    /** 「活著」開關現況——僅 mirror 卷有意義；tick 卷恆為 false。 */
+    alive: boolean;
+    /** 最近幾折（喚醒層 P1），newest last——供折子卡消費。tick 卷／從未捎過話
+     *  的 mirror 卷是空陣列，不是「壞了」。 */
+    interludes: LabInterludeLive[];
+    /** 此刻正在做的事（喚醒層 P2）——只帶**在期**的（`endRealMs > 此刻`）：過期的
+     *  活動視同不存在，不必等誰去清它。角色自陳的活動才在這裡；行當節律推的「本該
+     *  在哪」是零 LLM 的預設行程，不進這一欄。沒人自陳過就是空陣列。 */
+    activities: Array<{ characterId: string; what: string }>;
 }
 
 /** One thing that happened TO the world (or that somebody did to it). */
@@ -226,6 +241,23 @@ function coldBeatsFromShoujuan(runId: string, world: WorldState): LabLiveBeat[] 
         }
     }
     return beats;
+}
+
+/** 冷卷的折子回填——與 `coldBeats` 同一姿態：manager 沒把這一卷開在記憶體裡時，
+ *  直接讀 `interludes.jsonl` 尾巴，讓折子卡在冷卷也不是空的。 */
+function coldInterludes(runId: string): Array<Omit<LabInterludeLive, 'portraitUrl'>> {
+    return tailInterludeRecords(runId, 40).map((r) => ({
+        id: r.id,
+        characterId: r.characterId,
+        name: r.name,
+        day: r.day,
+        tick: r.tick,
+        partOfDay: r.partOfDay,
+        realMs: r.realMs,
+        stimuli: r.stimuli.map((s) => ({ text: s.text, kind: s.kind })),
+        response: r.response,
+        ...(r.memoryNote ? { memoryNote: r.memoryNote } : {}),
+    }));
 }
 
 export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<LabLiveSnapshot> {
@@ -546,6 +578,26 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
     // source, no deck load, no special case.
     const pressure = w.deckId ? buildPressure(runId, world, w.deckId) : undefined;
 
+    // ── 時間法則 / 折子 (喚醒層 P1) ───────────────────────────────────────────
+    const timeMode: 'tick' | 'mirror' = meta.config.timeMode === 'mirror' ? 'mirror' : 'tick';
+    // 日期標籤是「日序」的顯示層投影（storyDateOfDayIndex），不取樣牆鐘——冷卷
+    // 讀 world.json 時 clock.day 可能落後於真實此刻，鐘面走多快是 StoryClock
+    // 元件自己的事，這裡只誠實地說「這一卷此刻是第幾日」。
+    const dateLabel = timeMode === 'mirror' && meta.epochRealMs != null
+        ? formatStoryDate(storyDateOfDayIndex(clock.day, meta.epochRealMs, SPRING_SNOW_MIRROR))
+        : undefined;
+    const interludeRows = active ? active.interludes : coldInterludes(runId);
+    const interludes: LabInterludeLive[] = interludeRows.map((r) => ({
+        ...r,
+        portraitUrl: assetUrlFor('character', r.name),
+    }));
+    // 在期的自陳活動。這裡取樣牆鐘是誠實的：問的是「此刻誰正做著什麼」，而快照
+    // 本來就是「此刻」的一張畫像（引擎那頭 nowMs 全由呼叫端傳，紀律不在這一層）。
+    const nowMs = Date.now();
+    const activities = Object.entries(w.activityByChar ?? {})
+        .filter(([, a]) => a.endRealMs > nowMs)
+        .map(([characterId, a]) => ({ characterId, what: a.what }));
+
     return {
         runId,
         meta,
@@ -575,6 +627,11 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         logs: (active?.logs ?? []).slice(-40),
         production,
         pressure,
+        timeMode,
+        ...(dateLabel ? { dateLabel } : {}),
+        alive: meta.alive === true,
+        interludes,
+        activities,
     };
 }
 

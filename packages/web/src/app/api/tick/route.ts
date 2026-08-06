@@ -20,6 +20,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { runTickLoopAction, type TickLoopInput } from '@/lib/actions/tick-loop';
 import type { TickLoopResult } from '@/lib/actions/tick-loop-types';
+import { runOnEnactChain } from '@/lib/server/enact-chain';
 
 // A tick fans out several LLM calls + chain writes — give it room. A tick can run
 // well past 300s (6 plans + social + POV, each LLM-bound); if the response is cut
@@ -28,21 +29,11 @@ import type { TickLoopResult } from '@/lib/actions/tick-loop-types';
 export const runtime = 'nodejs';
 export const maxDuration = 1800;
 
-// Process-wide tick mutex: only ONE tick body runs at a time. Even if a slow
-// tick's HTTP response is cut off (maxDuration) while its body runs on, the next
-// request WAITS here instead of overlapping. Covers the headless world-loop; the
-// admin SchedulerPanel calls runTickLoopAction directly but is manual/rare.
-let tickChain: Promise<unknown> = Promise.resolve();
+// 演繹鏈（原本是這個 route 自己的 tickChain，見 lib/server/enact-chain.ts）：任何
+// 時刻至多一個演繹在寫世界。即使一拍的 HTTP 回應被 maxDuration 切斷、拍身仍在跑，
+// 下一個請求也只會在鏈上等，不會兩份拍身重疊。折子（/api/wake）共用同一條鏈。
 function runSerializedTick(input: TickLoopInput): Promise<TickLoopResult> {
-    const run = tickChain.then(
-        () => runTickLoopAction(input),
-        () => runTickLoopAction(input),
-    );
-    tickChain = run.then(
-        () => {},
-        () => {},
-    );
-    return run;
+    return runOnEnactChain(() => runTickLoopAction(input));
 }
 
 function authorized(req: NextRequest): boolean {

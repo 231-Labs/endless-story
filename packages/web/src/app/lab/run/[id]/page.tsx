@@ -19,9 +19,11 @@ import { LabCharacterSheet } from '@/components/lab/LabCharacterSheet';
 import { LabConfigDrawer } from '@/components/lab/LabConfigDrawer';
 import { LabControls } from '@/components/lab/LabControls';
 import { LabHandscroll } from '@/components/lab/LabHandscroll';
+import { LabInterludeStrip } from '@/components/lab/LabInterludeStrip';
 import { LabPressurePanel } from '@/components/lab/LabPressurePanel';
 import { LabProductionPanel } from '@/components/lab/LabProductionPanel';
 import { LabSceneSheet } from '@/components/lab/LabSceneSheet';
+import { LabWakeBar } from '@/components/lab/LabWakeBar';
 import { LabWishBoard } from '@/components/lab/LabWishBoard';
 import { LabWishWall } from '@/components/lab/LabWishWall';
 import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
@@ -162,6 +164,16 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                     <div className="w-full">
                         <LabControls snapshot={snapshot} onChanged={refresh} />
                     </div>
+                    {snapshot.timeMode === 'mirror' ? (
+                        <div className="w-full">
+                            <LabWakeBar runId={id} snapshot={snapshot} onChanged={refresh} />
+                        </div>
+                    ) : null}
+                    {snapshot.interludes.length ? (
+                        <div className="w-full">
+                            <LabInterludeStrip interludes={snapshot.interludes} />
+                        </div>
+                    ) : null}
                 </div>
             </header>
 

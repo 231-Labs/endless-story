@@ -56,8 +56,11 @@ export async function runPlanAction(
     const name =
         (charRes?.json as unknown as { profile?: { name?: string } })?.profile?.name ?? '無名';
     const sagaName = (sagaRes?.json as unknown as { name?: string })?.name ?? '戲班';
+    // 鏡像世界報日期，tick 世界報日序。
     const dayLabel = worldTime
-        ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}`
+        ? worldTime.dateLabel
+            ? `${worldTime.dateLabel} · ${worldTime.partOfDay}`
+            : `第 ${worldTime.day} 日 · ${worldTime.partOfDay}`
         : '某日';
 
     const [recalledRaw, currentPlanRaw] = await Promise.all([
