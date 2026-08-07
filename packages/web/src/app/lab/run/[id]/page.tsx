@@ -11,6 +11,8 @@ import { use, useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import { BeadCurtain } from '@/components/lab/LabOrnaments';
+import { StoryClock } from '@/components/StoryClock';
+import { SPRING_SNOW_MIRROR } from '@endless-story/shared/world-clock';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { IconBack, IconExport, IconGallery, IconInterview, IconObjects, IconScroll } from '@/components/lab/LabIcons';
 import { LabBeatDock } from '@/components/lab/LabBeatDock';
@@ -111,7 +113,16 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                     <div className="min-w-0">
                         <h1 className="truncate font-serif text-lg tracking-[0.15em] text-ink">{snapshot.meta.title}</h1>
                         <p className="truncate font-serif text-2xs tracking-[0.18em] text-mute" title={`${snapshot.saga.name} · 本日第 ${snapshot.clock.tickOfDay + 1}／${snapshot.clock.ticksPerDay} 拍`}>
-                            {snapshot.saga.name} · {snapshot.saga.worldTime?.label}
+                            {/* mirror 卷的副標就是題字：日期＋活時鐘——不另設一條日期橫條（單層 header）。 */}
+                            {snapshot.saga.name} ·{' '}
+                            {snapshot.timeMode === 'mirror' && snapshot.dateLabel ? (
+                                <>
+                                    <span className="text-ink/75">{snapshot.dateLabel}</span> ·{' '}
+                                    <StoryClock mirror={SPRING_SNOW_MIRROR} />
+                                </>
+                            ) : (
+                                snapshot.saga.worldTime?.label
+                            )}
                         </p>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
@@ -160,14 +171,13 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             <IconExport />
                         </button>
                     </div>
-                    <div className="w-full">
+                    {/* 走拍控制與喚醒氣口同一行——單層 header，不再有第二條橫條。 */}
+                    <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2">
                         <LabControls snapshot={snapshot} onChanged={refresh} />
-                    </div>
-                    {snapshot.timeMode === 'mirror' ? (
-                        <div className="w-full">
+                        {snapshot.timeMode === 'mirror' ? (
                             <LabWakeBar runId={id} snapshot={snapshot} onChanged={refresh} />
-                        </div>
-                    ) : null}
+                        ) : null}
+                    </div>
                     {snapshot.interludes.length ? (
                         <div className="w-full">
                             <LabInterludeStrip interludes={snapshot.interludes} />
