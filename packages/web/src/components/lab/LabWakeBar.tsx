@@ -1,22 +1,22 @@
 'use client';
 
 /**
- * LabWakeBar — 題字行。mirror 卷專屬的一列小字（tick 卷回傳 null），
- * 語彙照 AGENT_WAKE_LAYER.md 附錄 A 的戲班用語——「捎話」不是「戳」，
- * 「活著」不是「on」。
+ * LabWakeBar — 喚醒氣口。mirror 卷專屬（tick 卷回傳 null），**不自成一行**：
+ * 它靠 `ml-auto` 貼在走拍控制列的右端——header 只有一層，日期與活時鐘
+ * 題在副標裡（run 頁的 subtitle），不另設日期橫條。
  *
- * 視覺上刻意不是工具列：左邊題日期與時刻，右邊兩個氣口都只是文字，
- * 沒有框也沒有膠囊——這一列壓在手卷之上，任何一枚按鈕的邊都會搶戲。
- * 捎話採漸進揭露：平時只有兩個字，點開才在原位長出「給 誰：一句話」，
- * 不彈窗、不換行、不把版推下去（min-h 撐住）。
+ * 語彙照 AGENT_WAKE_LAYER.md 附錄 A 的戲班用語——「捎話」不是「戳」；
+ * 開關兩態是「活著／歇班」——「歇班」不是「靜止」，班子下班了，世界的
+ * 時間照走；也避免與控制列的「靜（場）」狀態章撞字。
+ *
+ * 兩個氣口都只是文字，沒有框也沒有膠囊——任何一枚按鈕的邊都會搶戲。
+ * 捎話採漸進揭露：平時只有兩個字，點開才在原位長出「給 誰：一句話」。
  *
  * 「活著」打 control alive；捎話送出一句話進折子佇列，engine 的 runInterludes
  * 之後在幾十秒內給出回應（debounce 窗 + driver 巡佇列間隔，見 manager.ts）。
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { StoryClock } from '@/components/StoryClock';
-import { SPRING_SNOW_MIRROR } from '@endless-story/shared/world-clock';
 import { useToast } from '@/components/common/Toaster';
 import { labApi } from './useLab';
 import type { LabLiveSnapshot } from '@/lib/lab/live';
@@ -103,29 +103,19 @@ export function LabWakeBar({
     };
 
     return (
-        <div className="flex min-h-[2.5rem] flex-wrap items-center justify-between gap-3 border-t border-hairline/40 pt-2.5">
-            {/* 題字 —— 日期與時刻一體，日子稍實，時辰退後半步 */}
-            <span
-                className="font-serif text-xs tracking-[0.15em] text-mute"
-                title="鏡像時間：鐘面走真實時刻，年份減一百——曆法見 docs/narrative/WORLD_TIME_MIRROR.md"
-            >
-                <span className="text-ink/90">{snapshot.dateLabel ?? '……'}</span> · <StoryClock mirror={SPRING_SNOW_MIRROR} />
-            </span>
-
-            {/* 氣口 —— 全是文字，沒有一個框 */}
-            <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
                 <button
                     type="button"
                     disabled={toggling}
                     onClick={() => void toggleAlive()}
-                    title={alive ? '活著 · 與現實同刻——點一下讓它靜止' : '靜止——點一下讓這一卷與現實同刻活著'}
+                    title={alive ? '活著 · 與現實同刻——點一下讓班子歇著' : '歇班——點一下讓這一卷與現實同刻活著'}
                     className="group inline-flex items-center gap-1.5 font-serif text-2xs tracking-[0.2em] transition disabled:opacity-50"
                 >
                     <span
                         className={`h-1.5 w-1.5 shrink-0 rounded-full ${alive ? 'animate-lab-live-dot bg-cinnabar' : 'bg-mute/40'}`}
                     />
                     <span className={`${alive ? 'text-ink/85' : 'text-mute'} ${QUIET_LINK} group-hover:text-ink group-hover:underline`}>
-                        {alive ? '活著' : '靜止'}
+                        {alive ? '活著' : '歇班'}
                     </span>
                 </button>
 
@@ -198,7 +188,6 @@ export function LabWakeBar({
                         捎話
                     </button>
                 )}
-            </span>
-        </div>
+        </span>
     );
 }
