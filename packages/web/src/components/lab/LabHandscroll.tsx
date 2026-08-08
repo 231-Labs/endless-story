@@ -47,6 +47,60 @@ type FanFilter = 'occupied' | 'performing' | 'private';
 export function LabHandscroll({ saga, scenes, locations, streams, artByLocationId, onSelectScene }: Props) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [filters, setFilters] = useState<Set<FanFilter>>(new Set());
+    // 界籤摺扇：收合時只留「此刻所在」一枚小籤（油畫幾乎全裸），點開才展全戲目。
+    // 選了地界不收——連跳是常態；點進畫裡（外點）或 Esc 才收。
+    const [navOpen, setNavOpen] = useState(false);
+    const [centerIdx, setCenterIdx] = useState(0);
+    const navRef = useRef<HTMLDivElement>(null);
+
+    // 跟著捲軸記「此刻視窗中央是哪一欄」——收合籤的名字由它決定。
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        let raf = 0;
+        const measure = () => {
+            raf = 0;
+            const columns = Array.from(el.firstElementChild?.children ?? []) as HTMLElement[];
+            if (!columns.length) return;
+            const centre = el.scrollLeft + el.clientWidth / 2;
+            let nearest = 0;
+            let best = Infinity;
+            columns.forEach((c, i) => {
+                const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - centre);
+                if (d < best) {
+                    best = d;
+                    nearest = i;
+                }
+            });
+            setCenterIdx((prev) => (prev === nearest ? prev : nearest));
+        };
+        const onScroll = () => {
+            if (!raf) raf = requestAnimationFrame(measure);
+        };
+        measure();
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => {
+            el.removeEventListener('scroll', onScroll);
+            cancelAnimationFrame(raf);
+        };
+    }, []);
+
+    // 展開時：點到籤外（畫裡）或 Esc 即收。只在展開時掛，收合／unmount 清掉。
+    useEffect(() => {
+        if (!navOpen) return;
+        const onDown = (e: PointerEvent) => {
+            if (navRef.current && !navRef.current.contains(e.target as Node)) setNavOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setNavOpen(false);
+        };
+        window.addEventListener('pointerdown', onDown);
+        window.addEventListener('keydown', onKey);
+        return () => {
+            window.removeEventListener('pointerdown', onDown);
+            window.removeEventListener('keydown', onKey);
+        };
+    }, [navOpen]);
 
     const layout = useMemo(() => computeHandscrollLayout(locations, scenes), [locations, scenes]);
     const partOfDay = saga.worldTime?.partOfDay ?? 'noon';
@@ -145,38 +199,69 @@ export function LabHandscroll({ saga, scenes, locations, streams, artByLocationI
 
     return (
         <div className="relative h-full min-h-0">
-            {/* 界籤與篩子 —— 一列薄簾：點地界跳欄、點質地篩扇 */}
+            {/* 界籤摺扇 —— 收合只留「此刻所在」，點開才展全戲目與篩子。
+                選了地界不收（連跳是常態）；點進畫裡或 Esc 才收。 */}
             <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex justify-center px-3">
-                <div className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-hairline/60 bg-surface/80 px-2 py-1 shadow-sm backdrop-blur-md no-scrollbar dark:bg-elevated/75">
-                    {layout.segments.map((seg, i) => (
+                <div
+                    ref={navRef}
+                    className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-hairline/60 bg-surface/80 px-2 py-1 shadow-sm backdrop-blur-md no-scrollbar dark:bg-elevated/75"
+                >
+                    {navOpen ? (
+                        <>
+                            {layout.segments.map((seg, i) => (
+                                <button
+                                    key={seg.location.id}
+                                    type="button"
+                                    onClick={() => jumpToColumn(i)}
+                                    title={`跳到 ${seg.location.name}`}
+                                    className={`shrink-0 rounded-full px-2.5 py-0.5 font-serif text-2xs tracking-[0.15em] transition hover:text-cinnabar ${
+                                        i === centerIdx ? 'text-ink/90' : 'text-mute'
+                                    }`}
+                                >
+                                    {seg.location.name}
+                                </button>
+                            ))}
+                            <span aria-hidden className="mx-1 h-3 w-px shrink-0 bg-hairline/70" />
+                            {([
+                                ['occupied', '有人', '只亮此刻有人的場景'],
+                                ['performing', '上演', '只亮正走拍的場景'],
+                                ['private', '幽', '只亮窗內私地'],
+                            ] as Array<[FanFilter, string, string]>).map(([key, label, hint]) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => toggleFilter(key)}
+                                    title={hint}
+                                    className={`shrink-0 rounded-full px-2.5 py-0.5 font-serif text-2xs tracking-[0.2em] transition ${
+                                        filters.has(key) ? 'bg-cinnabar text-white' : 'text-mute hover:text-ink'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </>
+                    ) : (
                         <button
-                            key={seg.location.id}
                             type="button"
-                            onClick={() => jumpToColumn(i)}
-                            title={`跳到 ${seg.location.name}`}
-                            className="shrink-0 rounded-full px-2.5 py-0.5 font-serif text-2xs tracking-[0.15em] text-mute transition hover:text-cinnabar"
+                            aria-expanded={false}
+                            onClick={() => setNavOpen(true)}
+                            title="戲目與篩子——點開跳地界、篩場景"
+                            className="group inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 font-serif text-2xs tracking-[0.15em] text-mute transition hover:text-ink"
                         >
-                            {seg.location.name}
+                            <span className="text-ink/85">{layout.segments[centerIdx]?.location.name ?? '戲目'}</span>
+                            {/* 篩子開著卻收了扇——留一顆硃點提醒「你看到的不是全部」 */}
+                            {filters.size > 0 ? (
+                                <span
+                                    aria-hidden
+                                    title="有篩子開著"
+                                    className="h-1 w-1 shrink-0 rounded-full bg-cinnabar"
+                                />
+                            ) : null}
+                            <span aria-hidden className="text-2xs text-mute/70 transition group-hover:text-ink/70">
+                                ▾
+                            </span>
                         </button>
-                    ))}
-                    <span aria-hidden className="mx-1 h-3 w-px shrink-0 bg-hairline/70" />
-                    {([
-                        ['occupied', '有人', '只亮此刻有人的場景'],
-                        ['performing', '上演', '只亮正走拍的場景'],
-                        ['private', '幽', '只亮窗內私地'],
-                    ] as Array<[FanFilter, string, string]>).map(([key, label, hint]) => (
-                        <button
-                            key={key}
-                            type="button"
-                            onClick={() => toggleFilter(key)}
-                            title={hint}
-                            className={`shrink-0 rounded-full px-2.5 py-0.5 font-serif text-2xs tracking-[0.2em] transition ${
-                                filters.has(key) ? 'bg-cinnabar text-white' : 'text-mute hover:text-ink'
-                            }`}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                    )}
                 </div>
             </div>
 
