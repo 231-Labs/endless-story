@@ -543,6 +543,16 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             continue;
         }
 
+        // 座席空回要喊出聲：「（沉默。）」是解析拿不到東西後補的殼，不是角色選的。
+        // 不喊的話，配額用盡／模型 id 打錯／模型不吐 JSON 全戴著同一張沉默的臉，
+        // 卷上看起來像滿場人在沉思（ports.ts 的鐵律：失敗要 LOUD）。
+        if (r.silent) {
+            log.push(
+                `[座席空回] ${actor.name}這一拍沒能回出可用的一拍（${
+                    r.silent === 'no-json' ? '回覆裡沒有可解析的 JSON——多半是模型或通道出事' : '模型交了白卷'
+                }），只好按下不表。`,
+            );
+        }
         log.push(`${actor.name}：${r.beat}`);
         // 文筆二階 v2: append this committed beat to the actor's cross-scene rolling
         // buffer (bounded), so later beats — this scene AND later scenes/ticks — can
