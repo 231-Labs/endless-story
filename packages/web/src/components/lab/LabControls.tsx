@@ -101,35 +101,41 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
                 type="button"
                 disabled={busy !== null || running}
                 onClick={() => act('step', () => labApi.control(snapshot.runId, { action: 'step' }))}
-                aria-label="走一拍"
-                title="走一拍"
+                aria-label={mirror ? '叫一拍' : '走一拍'}
+                title={mirror ? '叫一拍 —— 立刻搬演此刻這個時辰（不等時辰邊界）' : '走一拍'}
                 className={`${iconButton} border-cinnabar/50 text-cinnabar hover:border-cinnabar`}
             >
                 <IconStep />
             </button>
 
-            <span className="inline-flex items-center gap-1">
-                <button
-                    type="button"
-                    disabled={busy !== null || running}
-                    onClick={() => act('run', () => labApi.control(snapshot.runId, { action: 'run', ticks }))}
-                    aria-label={`連走 ${ticks} 拍`}
-                    title={`連走 ${ticks} 拍`}
-                    className={iconButton}
-                >
-                    <IconRun />
-                </button>
-                <input
-                    type="number"
-                    min={1}
-                    max={600}
-                    value={ticks}
-                    onChange={(e) => setTicks(Math.max(1, Math.min(600, Number(e.target.value) || 1)))}
-                    className="es-field w-14 px-1.5 py-1.5 text-center text-xs"
-                    aria-label="連走拍數"
-                    title="連走拍數"
-                />
-            </span>
+            {/* 連走 N 拍只在排演卷成立。鏡像卷的一拍綁在時辰上：連下 6 拍不會把
+                世界推到明天，只是叫同一個黃昏裡搬演六次——那不是使用者按下
+                「連走 6 拍」時心裡想的事。活世界要往前走，靠的是「活著」與時辰
+                邊界，手撥就是一拍。 */}
+            {mirror ? null : (
+                <span className="inline-flex items-center gap-1">
+                    <button
+                        type="button"
+                        disabled={busy !== null || running}
+                        onClick={() => act('run', () => labApi.control(snapshot.runId, { action: 'run', ticks }))}
+                        aria-label={`連走 ${ticks} 拍`}
+                        title={`連走 ${ticks} 拍`}
+                        className={iconButton}
+                    >
+                        <IconRun />
+                    </button>
+                    <input
+                        type="number"
+                        min={1}
+                        max={600}
+                        value={ticks}
+                        onChange={(e) => setTicks(Math.max(1, Math.min(600, Number(e.target.value) || 1)))}
+                        className="es-field w-14 px-1.5 py-1.5 text-center text-xs"
+                        aria-label="連走拍數"
+                        title="連走拍數"
+                    />
+                </span>
+            )}
 
             <button
                 type="button"
