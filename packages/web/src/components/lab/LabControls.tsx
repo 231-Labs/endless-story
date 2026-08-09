@@ -39,79 +39,73 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
     const iconButton =
         'es-icon-button !h-9 !w-9 text-[15px] disabled:opacity-35 disabled:hover:border-hairline';
 
-    // ── 狀態章（世界在做什麼）+ 開關（班子上不上工），併為一枚 ──────────
     const isError = snapshot.phase === 'error';
     const mirror = snapshot.timeMode === 'mirror';
     const alive = snapshot.alive;
-    // 章面只寫一個字（或佇列數）：走拍中報還剩幾拍，靜下來報班子在不在。
-    const stateLabel = isError ? '!' : running ? String(snapshot.pendingTicks) : mirror ? (alive ? '活著' : '歇班') : '靜';
-    const stateTitle = isError
-        ? '出錯（詳見下方）'
+    // 主鈕寫的是**動作**，不是狀態——播放器的老規矩：看見 ▷ 就是「按了會開」，
+    // 看見 ⏸ 就是「按了會停」。先前寫狀態（「活著／歇班」）誰也猜不到點下去
+    // 是啟動還是停止；一個世界只有開與停兩件事，就該是一顆鈕。
+    const primary = mirror
+        ? alive
+            ? { label: '歇班', icon: <IconPause />, title: '歇班 —— 停下自走（世界的時間照走，只是無人搬演）', run: () => labApi.control(snapshot.runId, { action: 'pause' }), key: 'pause' }
+            : { label: '開演', icon: <IconStep />, title: '開演 —— 讓這一卷與現實同刻活著，每個時辰邊界自己走一拍', run: () => labApi.control(snapshot.runId, { action: 'alive', on: true }), key: 'alive' }
         : running
-            ? `走拍中 · 佇列尚餘 ${snapshot.pendingTicks} 拍${mirror ? (alive ? '（班子活著，時辰邊界自走）· 點一下歇班' : '（班子歇著，這是手撥的拍）· 點一下讓它活著') : ''}`
-            : mirror
-                ? alive
-                    ? '活著 · 與現實同刻，時辰邊界自走——點一下讓班子歇著'
-                    : '歇班 · 世界的時間照走，只是無人搬演——點一下讓它活著'
-                : '靜場';
-    const chipClass = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-serif text-2xs tracking-[0.2em] ${
-        isError
-            ? 'border-cinnabar/60 text-cinnabar'
-            : running || (mirror && alive)
-                ? 'border-cinnabar/40 text-ink/85'
-                : 'border-hairline text-mute'
-    }`;
-    const dotClass = `h-1.5 w-1.5 shrink-0 rounded-full ${
-        isError
-            ? 'bg-cinnabar'
-            : running || (mirror && alive)
-                ? 'animate-lab-live-dot bg-cinnabar'
-                : mirror
-                    ? 'bg-mute/40'
-                    : 'bg-jade/70'
-    }`;
+            ? { label: '停', icon: <IconPause />, title: '停（本拍走完即靜場）', run: () => labApi.control(snapshot.runId, { action: 'pause' }), key: 'pause' }
+            : { label: '走一拍', icon: <IconStep />, title: '走一拍', run: () => labApi.control(snapshot.runId, { action: 'step' }), key: 'step' };
+    const primaryLive = mirror ? alive : running;
 
     return (
         <div className="flex flex-wrap items-center gap-2">
-            {/* 世界此刻的狀態 —— 只此一枚章，而它本身就是「活著」的開關（鏡像卷）。
-                先前一列裡兩顆點各說各話（演繹狀態一顆、自走開關一顆），誰也不知道
-                哪個才算數；併章之後：章面說世界正在做什麼，點一下換班子上下工。 */}
+            {/* 一顆主鈕定生死。走拍與否只是它左邊那顆點的事，不另立門戶。 */}
+            <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => act(primary.key, primary.run)}
+                title={primary.title}
+                aria-label={primary.label}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-serif text-2xs tracking-[0.2em] transition disabled:opacity-50 ${
+                    primaryLive
+                        ? 'border-cinnabar/50 text-ink/85 hover:border-cinnabar'
+                        : 'border-hairline text-mute hover:border-cinnabar/60 hover:text-cinnabar'
+                }`}
+            >
+                <span className="text-[13px] leading-none">{primary.icon}</span>
+                {primary.label}
+            </button>
+
+            {/* 世界此刻在不在動——一顆點，不佔字。走拍中會呼吸，出錯轉硃。 */}
+            <span
+                title={
+                    isError
+                        ? (error ?? snapshot.lastError ?? '出錯（詳見下方）')
+                        : running
+                            ? `走拍中${snapshot.pendingTicks > 0 ? ` · 佇列尚餘 ${snapshot.pendingTicks} 拍` : ''}`
+                            : mirror && alive
+                                ? '活著 · 等下一個時辰邊界'
+                                : '靜場'
+                }
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    isError ? 'bg-cinnabar' : running || (mirror && alive) ? 'animate-lab-live-dot bg-cinnabar' : 'bg-mute/35'
+                }`}
+            />
+
+            {/* 鏡像卷的次要動作：不等時辰，現在就演一拍。文字、安靜，不與主鈕爭。
+                （排演卷沒有這一顆——那裡主鈕本身就是「走一拍」。） */}
             {mirror ? (
                 <button
                     type="button"
-                    disabled={busy === 'alive'}
-                    onClick={() =>
-                        act('alive', () => labApi.control(snapshot.runId, { action: 'alive', on: !alive }))
-                    }
-                    title={stateTitle}
-                    aria-pressed={alive}
-                    className={`${chipClass} transition hover:border-cinnabar/60 disabled:opacity-50`}
+                    disabled={busy !== null || running}
+                    onClick={() => act('step', () => labApi.control(snapshot.runId, { action: 'step' }))}
+                    title="叫一拍 —— 不等時辰邊界，立刻搬演此刻這個時辰"
+                    className="font-serif text-2xs tracking-[0.2em] text-mute underline-offset-4 decoration-hairline transition hover:text-ink hover:underline disabled:opacity-40 disabled:hover:no-underline"
                 >
-                    <span className={dotClass} />
-                    {stateLabel}
+                    叫一拍
                 </button>
-            ) : (
-                <span title={stateTitle} className={chipClass}>
-                    <span className={dotClass} />
-                    {stateLabel}
-                </span>
-            )}
-
-            <button
-                type="button"
-                disabled={busy !== null || running}
-                onClick={() => act('step', () => labApi.control(snapshot.runId, { action: 'step' }))}
-                aria-label={mirror ? '叫一拍' : '走一拍'}
-                title={mirror ? '叫一拍 —— 立刻搬演此刻這個時辰（不等時辰邊界）' : '走一拍'}
-                className={`${iconButton} border-cinnabar/50 text-cinnabar hover:border-cinnabar`}
-            >
-                <IconStep />
-            </button>
+            ) : null}
 
             {/* 連走 N 拍只在排演卷成立。鏡像卷的一拍綁在時辰上：連下 6 拍不會把
                 世界推到明天，只是叫同一個黃昏裡搬演六次——那不是使用者按下
-                「連走 6 拍」時心裡想的事。活世界要往前走，靠的是「活著」與時辰
-                邊界，手撥就是一拍。 */}
+                「連走 6 拍」時心裡想的事。 */}
             {mirror ? null : (
                 <span className="inline-flex items-center gap-1">
                     <button
@@ -136,19 +130,6 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
                     />
                 </span>
             )}
-
-            {/* 活著但還沒走拍時也要能按停——那正是最需要按停的時刻（下一個時辰
-                邊界一到它就自己開演）。停＝清佇列＋歇班，見 manager.pause。 */}
-            <button
-                type="button"
-                disabled={!running && !(mirror && alive)}
-                onClick={() => act('pause', () => labApi.control(snapshot.runId, { action: 'pause' }))}
-                aria-label={mirror ? '停（本拍走完即歇班）' : '停（本拍走完即靜場）'}
-                title={mirror ? '停 —— 本拍走完即歇班；要再活過來，點左邊那枚章' : '停（本拍走完即靜場）'}
-                className={iconButton}
-            >
-                <IconPause />
-            </button>
 
             <button
                 type="button"
