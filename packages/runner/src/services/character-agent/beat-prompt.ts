@@ -265,6 +265,15 @@ function genderNote(input: ActBeatInput): string {
 export interface BeatResult {
     /** Objective act/say, one line. */
     beat: string;
+    /**
+     * 座席空回 —— 這一拍的「（沉默。）」不是角色選的，是解析拿不到東西後補上的殼。
+     * 兩種來路要分清楚，否則配額用盡、模型 id 打錯、模型不吐 JSON 這幾件事，
+     * 全都戴著同一張沉默的臉，卷上看起來像角色在沉思（真實事故上曾整整一拍
+     * 十二個人集體「沉默」）。呼叫端據此喊出聲；沒空回時本欄不存在。
+     *   'no-json'    —— 整段回覆裡沒有一塊可解析的 JSON（多半是模型／通道出事）
+     *   'empty-beat' —— JSON 有，但 beat 欄是空的（模型自己交了白卷）
+     */
+    silent?: 'no-json' | 'empty-beat';
     /** Private thought, one line. */
     inner: string;
     /** Who this beat addresses (co-present name), if anyone. */
@@ -316,7 +325,8 @@ function extractBeatJson(raw: string): Record<string, unknown> | null {
 
 /** Shared by the stateless runner and the persistent-session adapter. */
 export function parseBeatResult(raw: string, actorName: string): BeatResult {
-    const o = extractBeatJson(raw) ?? {};
+    const parsed = extractBeatJson(raw);
+    const o = parsed ?? {};
     const str = (v: unknown): string => typeof v === 'string' ? v.trim() : '';
     const prose = (v: unknown): string => toTraditional(str(v));
     const esc = actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -393,8 +403,10 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
     const act = actId && actId !== '無'
         ? { id: actId, ...(actTargetName && actTargetName !== '無' ? { targetName: actTargetName } : {}) }
         : undefined;
+    const beatText = deName(prose(o.beat));
     return {
-        beat: deName(prose(o.beat)) || '（沉默。）',
+        beat: beatText || '（沉默。）',
+        ...(beatText ? {} : { silent: parsed ? ('empty-beat' as const) : ('no-json' as const) }),
         inner: deName(prose(o.inner)),
         addressed: addressed && addressed !== '無' ? addressed : undefined,
         audience,
