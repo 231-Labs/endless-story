@@ -137,12 +137,14 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
                 </span>
             )}
 
+            {/* 活著但還沒走拍時也要能按停——那正是最需要按停的時刻（下一個時辰
+                邊界一到它就自己開演）。停＝清佇列＋歇班，見 manager.pause。 */}
             <button
                 type="button"
-                disabled={!running}
+                disabled={!running && !(mirror && alive)}
                 onClick={() => act('pause', () => labApi.control(snapshot.runId, { action: 'pause' }))}
-                aria-label="停（本拍走完即靜場）"
-                title="停（本拍走完即靜場）"
+                aria-label={mirror ? '停（本拍走完即歇班）' : '停（本拍走完即靜場）'}
+                title={mirror ? '停 —— 本拍走完即歇班；要再活過來，點左邊那枚章' : '停（本拍走完即靜場）'}
                 className={iconButton}
             >
                 <IconPause />
