@@ -54,7 +54,7 @@ import { SPRING_SNOW_MIRROR, bucketsBetween, formatStoryDate, storyNow } from '@
 import { beatsFromTickRecords, tailInterludeRecords, tailTickRecords } from './artifacts';
 import { writeCheckpoint } from './checkpoints';
 import { readJson, runDir, writeJsonAtomic } from './paths';
-import { readRunMeta, writeRunMeta, writeRunStatus } from './store';
+import { readRunMeta, setRunAlive, writeRunMeta, writeRunStatus } from './store';
 import { deckDirFor, readSeedRaw, seasonDirFor, seedDirFor } from './seeds';
 import type { LabInterludeLive, LabLiveBeat, LabRunMeta, LabRunPhase, LabTickRecord } from './types';
 
@@ -157,6 +157,9 @@ export interface ActiveRun {
      *  打過拍時的 `epochRealMs`）——driver 拿它跟 `Date.now()` 比 bucket 序，
      *  不必每 45s 重讀 ticks.jsonl。 */
     lastTickRealMs?: number;
+    /** driver 上一次排拍時的 `currentTick`——拍還沒落地就不再疊第二記
+     *  （見 driverTick 的 owedTickPending：這是永動機的閘）。 */
+    driverQueuedAtTick?: number;
     /** Feed epoch — changes when the run is (re)opened in a process, so live
      *  clients know their beat cursor belongs to a different seq space. */
     epoch: string;
@@ -500,13 +503,21 @@ export class LabRunManager {
         // 「活著」什麼都不會發生，要空等到下一個邊界（最長近四小時）。fork 卷
         // 繼承 parent 的 currentTick（>0），不觸發；世界照冷啟動紀律至多一拍。
         const neverTicked = run.world.data.clock.currentTick === 0;
+        // 上一記 driver 排的拍還沒落地，就不再疊第二記——一次只欠一拍。
+        // 沒有這道閘，一記走不完的拍會把世界卡成永動機：拍失敗（或被打斷回滾）
+        // 就不推進 `lastTickRealMs`，於是「距上一拍已跨時辰」恆為真，每 45 秒
+        // 再排一拍，號碼永遠停在原地、燒著真金白銀，而且怎麼按都停不下來
+        // （實錄：tick 2 反覆 `recovered interrupted tick 2` 無限重跑）。
+        // 拍真的落地了 currentTick 就變了，這道閘自動放行。
+        const owedTickPending = run.driverQueuedAtTick === run.world.data.clock.currentTick;
         let queued = false;
-        if (crossed > 0 || neverTicked) {
+        if ((crossed > 0 || neverTicked) && !owedTickPending) {
             // 跨了幾個時辰邊界都只補一拍——嚴禁補演（AGENT_WAKE_LAYER §六之五）；
             // 跨了幾界只記進這一拍的 skippedBuckets，供 UI「歇了 N 拍」一行
             // （開鑼拍 crossed 為 0 就不記）。
             if (crossed > 0) run.pendingSkippedBuckets = crossed;
             run.pendingTicks += 1;
+            run.driverQueuedAtTick = run.world.data.clock.currentTick;
             queued = true;
         }
         // 佇列裡有話，或有一枚到期的起念——後者用 peek（`hasDueIntent` 不改狀態），
@@ -733,9 +744,25 @@ export class LabRunManager {
         if (run.phase !== 'running') void this.loop(run);
     }
 
+    /**
+     * 停 —— 清佇列，並把自走一併收了（鏡像卷）。
+     *
+     * 「停」就該是停。只清佇列的話，driver 下一巡（45 秒）又排一拍，這顆鈕
+     * 在使用者眼裡就是壞的。要再活過來，點狀態章——一個明白的動作，不是
+     * 按了停還會自己醒來。
+     */
     pause(runId: string): void {
         const run = this.active.get(runId);
-        if (run) run.pendingTicks = 0;
+        if (run) {
+            run.pendingTicks = 0;
+            run.driverQueuedAtTick = undefined;
+        }
+        const meta = readRunMeta(runId);
+        if (meta?.alive) {
+            setRunAlive(runId, false);
+            if (run) run.meta.alive = false;
+        }
+        this.disarmAlive(runId);
     }
 
     private async loop(run: ActiveRun): Promise<void> {
