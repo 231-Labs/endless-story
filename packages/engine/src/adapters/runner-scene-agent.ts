@@ -173,7 +173,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
         const raw = await this.sessions.project(identity, percept, {
             eventId: input.perceptId,
             instruction: '依照此刻知覺提出一拍待世界驗證的行動；這只是提案，尚未發生。只輸出指定 JSON。',
-            maxTokens: input.consummate ? 900 : 480,
+            maxTokens: input.consummate ? 1600 : 1100,
             temperature: 0.95,
         });
         return characterAgent.parseBeatResult(raw, input.name);

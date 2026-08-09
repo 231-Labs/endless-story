@@ -274,6 +274,10 @@ export interface BeatResult {
      *   'empty-beat' —— JSON 有，但 beat 欄是空的（模型自己交了白卷）
      */
     silent?: 'no-json' | 'empty-beat';
+    /** 這一拍是從被截斷的輸出裡撈回來的（見 salvageTruncatedBeat）：話撈到了，
+     *  但結構性欄位（物件效果／銀錢／世情動作）一律棄用。呼叫端據此記一筆，
+     *  連著出現就是 maxTokens 該再放寬的訊號。 */
+    truncated?: true;
     /** Private thought, one line. */
     inner: string;
     /** Who this beat addresses (co-present name), if anyone. */
@@ -316,11 +320,35 @@ export interface BeatResult {
 
 function extractBeatJson(raw: string): Record<string, unknown> | null {
     const blocks = raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try { return JSON.parse(blocks[i]) as Record<string, unknown>; } catch { /* earlier block */ }
+    if (blocks?.length) {
+        for (let i = blocks.length - 1; i >= 0; i--) {
+            try { return JSON.parse(blocks[i]) as Record<string, unknown>; } catch { /* earlier block */ }
+        }
     }
-    return null;
+    return salvageTruncatedBeat(raw);
+}
+
+/**
+ * 撈回被截斷的一拍。
+ *
+ * 上面那個正規式要看到收尾的大括號才算數，於是輸出一被 max_tokens 剪斷，
+ * 整拍就無從解析——角色當場「（沉默。）」。中文一個字往往吃掉一到兩個 token，
+ * 話說得長的角色剛好卡在邊界上，同一拍裡有人開口有人啞掉，看起來像世界壞了
+ * （實錄：滿場沉默、偶爾一句）。話都已經說完了，只是缺一個右括號；撈出來便是。
+ *
+ * 只撈 beat 與 inner 兩個純字串欄位——結構性欄位（物件效果、銀錢命令、世情動作）
+ * 半截的寧可不要，殘缺的指令進了世界比沉默更糟。
+ */
+function salvageTruncatedBeat(raw: string): Record<string, unknown> | null {
+    const field = (name: string): string | undefined => {
+        const m = raw.match(new RegExp(`"${name}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`));
+        if (!m) return undefined;
+        try { return JSON.parse(`"${m[1]}"`) as string; } catch { return m[1]; }
+    };
+    const beat = field('beat');
+    if (!beat?.trim()) return null;
+    const inner = field('inner');
+    return { beat, ...(inner ? { inner } : {}), truncated: true };
 }
 
 /** Shared by the stateless runner and the persistent-session adapter. */
@@ -407,6 +435,7 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
     return {
         beat: beatText || '（沉默。）',
         ...(beatText ? {} : { silent: parsed ? ('empty-beat' as const) : ('no-json' as const) }),
+        ...(o.truncated === true ? { truncated: true as const } : {}),
         inner: deName(prose(o.inner)),
         addressed: addressed && addressed !== '無' ? addressed : undefined,
         audience,

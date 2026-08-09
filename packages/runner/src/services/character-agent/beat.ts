@@ -45,7 +45,11 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
         ],
         // Loosened (user: give the drama room to grow) — beats may breathe a
         // second sentence; the register still decides how much gets used.
-        maxTokens: input.consummate ? 900 : 480,
+        // 480 太窄:中文一字常吃一到兩個 token,一句對白＋心下＋結構欄位很容易
+        // 撞頂被剪斷,而截斷的 JSON 沒有收尾大括號 —— 整拍解析不到,角色當場沉默
+        // (實錄:滿場沉默、偶爾一句)。寬到話說得完為止;真的還是被剪,
+        // salvageTruncatedBeat 再撈一次。
+        maxTokens: input.consummate ? 1600 : 1100,
         temperature: 0.95,
     });
     return parseBeatResult(res.text, input.name);
