@@ -361,6 +361,34 @@ test('beat perception is structured and fails closed without an addressee', () =
     assert.equal(malformed.audience, 'scene', 'addressed-only needs a real addressee');
 });
 
+test('被截斷的一拍撈得回來，撈不回的空回要標明來路', () => {
+    // max_tokens 剪在半途：話說完了，只缺收尾的大括號。舊解析要看到 `}` 才算數，
+    // 於是整拍變「（沉默。）」——滿場沉默、偶爾一句的真兇。
+    const cut = parseBeatResult(
+        '{"beat":"她把水袖往右沉了半指，眼角掃過幕前那一點紅","inner":"今夜坐滿，穩住才是正經","addressed":"蘇映雪","audi',
+        '柳安春',
+    );
+    assert.equal(cut.beat, '她把水袖往右沉了半指，眼角掃過幕前那一點紅');
+    assert.equal(cut.inner, '今夜坐滿，穩住才是正經');
+    assert.equal(cut.truncated, true, '撈回來的拍要自報家門');
+    assert.equal(cut.silent, undefined, '撈到話就不算空回');
+    // 半截的結構性欄位一律棄用——殘缺的指令進了世界比沉默更糟。
+    assert.equal(cut.act, undefined);
+    assert.ok(!cut.objectEffects?.length);
+    assert.ok(!cut.economyCommands?.length);
+
+    // 真的什麼都沒有：兩種空回要分得清，才知道是通道出事還是模型交白卷。
+    const nothing = parseBeatResult('（我想不出來）', '連翹');
+    assert.equal(nothing.beat, '（沉默。）');
+    assert.equal(nothing.silent, 'no-json');
+    const blank = parseBeatResult('{"beat":"","inner":"心裡空空的"}', '連翹');
+    assert.equal(blank.silent, 'empty-beat');
+    // 完整 JSON 照舊，撈回旗標不得誤標。
+    const whole = parseBeatResult('{"beat":"點了點頭","inner":""}', '連翹');
+    assert.equal(whole.truncated, undefined);
+    assert.equal(whole.silent, undefined);
+});
+
 test('beat parser normalizes model prose to Traditional before canon', () => {
     const beat = parseBeatResult(
         '{"beat":"指尖划过那张侧影，直视苏映雪。","inner":"这纸要按我的规矩印。","addressed":"苏映雪","audience":"scene","objectEffects":[]}',

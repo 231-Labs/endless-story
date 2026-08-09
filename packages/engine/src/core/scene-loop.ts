@@ -546,6 +546,9 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         // 座席空回要喊出聲：「（沉默。）」是解析拿不到東西後補的殼，不是角色選的。
         // 不喊的話，配額用盡／模型 id 打錯／模型不吐 JSON 全戴著同一張沉默的臉，
         // 卷上看起來像滿場人在沉思（ports.ts 的鐵律：失敗要 LOUD）。
+        if (r.truncated) {
+            log.push(`[撈回] ${actor.name}這一拍的輸出被截斷，話撈回來了，結構性欄位（物件／銀錢／世情動作）棄用。`);
+        }
         if (r.silent) {
             log.push(
                 `[座席空回] ${actor.name}這一拍沒能回出可用的一拍（${
