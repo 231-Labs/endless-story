@@ -61,6 +61,9 @@ export interface LabRunConfig {
      *  預設（60s／6），這裡只在卷主動調校時覆寫；規範化後永遠給一組具體數字，
      *  夾在合理範圍內（見 run-config.ts）。 */
     interlude?: { debounceMs: number; dailyBudget: number };
+    /** 活著的世界隔多久搬演一拍（毫秒）。時辰照現實走，這是「戲」的節律——
+     *  一時辰四個鐘頭，人在裡頭當然不只做一件事。缺省 3 分鐘，下限 30 秒。 */
+    beatIntervalMs?: number;
 }
 
 /** lab-run.json — one per run directory; immutable provenance + lineage. */

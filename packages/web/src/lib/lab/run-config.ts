@@ -99,5 +99,10 @@ export function normalizeRunConfig(input: LabRunConfigInput | undefined): LabRun
         // 與加這層之前的每一卷行為相同。
         timeMode: input.timeMode === 'mirror' ? 'mirror' : 'tick',
         interlude: normalizeInterlude(input.interlude),
+        // 戲的節律（活著時隔多久搬演一拍）。不給就交給 manager 的預設三分鐘；
+        // 給了就夾在下限之上——低於 30 秒等於拿真金白銀餵一個看不完的拍流。
+        ...(Number.isFinite(input.beatIntervalMs) && (input.beatIntervalMs as number) > 0
+            ? { beatIntervalMs: Math.max(30_000, Math.min(3_600_000, input.beatIntervalMs as number)) }
+            : {}),
     };
 }

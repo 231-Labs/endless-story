@@ -50,7 +50,7 @@ import { auditSeasonEconomy } from '@endless-story/engine/core/season-economy';
 import { writeTickDossiers } from '@endless-story/engine/dossier-artifact';
 import { refreshSeasonEditorial, type AnthologyComposer } from '@endless-story/engine/editorial-artifact';
 import { loadLLMConfig, resolveTextProvider } from '@endless-story/llm';
-import { SPRING_SNOW_MIRROR, bucketsBetween, formatStoryDate, storyNow } from '@endless-story/shared/world-clock';
+import { SPRING_SNOW_MIRROR, bucketsBetween, formatStoryDate, isNightPart, storyNow } from '@endless-story/shared/world-clock';
 import { beatsFromTickRecords, tailInterludeRecords, tailTickRecords } from './artifacts';
 import { writeCheckpoint } from './checkpoints';
 import { readJson, runDir, writeJsonAtomic } from './paths';
@@ -66,6 +66,20 @@ const INTERLUDE_RING_CAP = 60;
  *  比引擎的 60s debounce 窗略短，讓折子在窗滿齡後盡快被巡到，體感仍是
  *  「幾十秒」而非「下一分鐘」。 */
 const ALIVE_POLL_MS = 45_000;
+/** 活著的世界隔多久搬演一拍（時辰照現實走，這是「戲」的節律，不是鐘的）。
+ *  預設三分鐘：看得見它在活，又不至於一個下午燒掉幾百次呼叫。 */
+const DEFAULT_BEAT_INTERVAL_MS = 180_000;
+const MIN_BEAT_INTERVAL_MS = 30_000;
+/** 連著這麼多拍走不動，班子自行歇了——世界不會凍在那裡等人發現，也不會
+ *  背著人一直重試燒錢。錯在哪一行都寫在 lastError 上。 */
+const AUTO_REST_AFTER_FAILURES = 3;
+
+function beatIntervalMsOf(run: { meta: LabRunMeta }): number {
+    const raw = run.meta.config.beatIntervalMs;
+    return Number.isFinite(raw) && (raw as number) > 0
+        ? Math.max(MIN_BEAT_INTERVAL_MS, raw as number)
+        : DEFAULT_BEAT_INTERVAL_MS;
+}
 
 const ECONOMY_ACTION_LABEL: Record<string, string> = {
     purchase: '購置',
@@ -157,9 +171,12 @@ export interface ActiveRun {
      *  打過拍時的 `epochRealMs`）——driver 拿它跟 `Date.now()` 比 bucket 序，
      *  不必每 45s 重讀 ticks.jsonl。 */
     lastTickRealMs?: number;
-    /** driver 上一次排拍時的 `currentTick`——拍還沒落地就不再疊第二記
-     *  （見 driverTick 的 owedTickPending：這是永動機的閘）。 */
-    driverQueuedAtTick?: number;
+    /** driver 上一次排拍的真實毫秒——戲的節律由它決定（見 beatIntervalMsOf）。 */
+    lastBeatAtMs?: number;
+    /** 連著幾拍走不動。落地一拍即歸零；累到 AUTO_REST_AFTER_FAILURES 就自行收班。 */
+    tickFailures?: number;
+    /** 夜話已經留過的那個時辰（`day:時辰`）——一時辰一行，不隨拍數重複。 */
+    lastNightNoticeKey?: string;
     /** Feed epoch — changes when the run is (re)opened in a process, so live
      *  clients know their beat cursor belongs to a different seq space. */
     epoch: string;
@@ -503,21 +520,30 @@ export class LabRunManager {
         // 「活著」什麼都不會發生，要空等到下一個邊界（最長近四小時）。fork 卷
         // 繼承 parent 的 currentTick（>0），不觸發；世界照冷啟動紀律至多一拍。
         const neverTicked = run.world.data.clock.currentTick === 0;
-        // 上一記 driver 排的拍還沒落地，就不再疊第二記——一次只欠一拍。
-        // 沒有這道閘，一記走不完的拍會把世界卡成永動機：拍失敗（或被打斷回滾）
-        // 就不推進 `lastTickRealMs`，於是「距上一拍已跨時辰」恆為真，每 45 秒
-        // 再排一拍，號碼永遠停在原地、燒著真金白銀，而且怎麼按都停不下來
-        // （實錄：tick 2 反覆 `recovered interrupted tick 2` 無限重跑）。
-        // 拍真的落地了 currentTick 就變了，這道閘自動放行。
-        const owedTickPending = run.driverQueuedAtTick === run.world.data.clock.currentTick;
+        // 時辰是鐘，拍是搬演——這兩件事先前被綁死成一件（一日六拍＝一時辰一拍），
+        // 於是「活著」的世界可以整整四個鐘頭一動也不動，看上去就是死的。人在四個
+        // 鐘頭裡當然不只做一件事：時辰照著現實走（永不快轉），戲則每隔幾分鐘搬演
+        // 一次。兩個節律各歸各位。
+        const sinceLastBeat = nowMs - (run.lastBeatAtMs ?? run.lastTickRealMs ?? run.meta.epochRealMs ?? nowMs);
+        // 夜裡不按分鐘搬演：入夜與深宵在鏡像時間裡是**真實八個鐘頭**，而引擎對夜拍
+        // 一律「快轉、睡去整併」（零場景零拍）——每三分鐘叫一次只是拿真金白銀買
+        // 一串空拍。夜裡只在時辰邊界走一拍，天亮自然回到分鐘節律。
+        // （tick 制下夜晚是六拍裡的兩拍，幾秒就過，從來不是問題；一換成鏡像時間
+        //  才顯出來：傍晚開演，21:00 之後整個世界空到隔天清晨五點。）
+        const beatDue = sinceLastBeat >= beatIntervalMsOf(run) && !isNightPart(storyNow(nowMs, SPRING_SNOW_MIRROR).partOfDay);
+        // 只防堆疊，不封死：手上還有沒走完的拍就不再排（拍失敗過也照樣能再試，
+        // 失敗連三記由下面的 autoRest 收班）。先前用「currentTick 沒變就不排」，
+        // 一記失敗的拍會讓 driver 永遠不再排拍——世界就此凍住，這才是「一動也
+        // 不動」的真兇。
+        const busyWithTick = run.pendingTicks > 0 || run.busy;
         let queued = false;
-        if ((crossed > 0 || neverTicked) && !owedTickPending) {
+        if ((crossed > 0 || neverTicked || beatDue) && !busyWithTick) {
             // 跨了幾個時辰邊界都只補一拍——嚴禁補演（AGENT_WAKE_LAYER §六之五）；
             // 跨了幾界只記進這一拍的 skippedBuckets，供 UI「歇了 N 拍」一行
-            // （開鑼拍 crossed 為 0 就不記）。
+            // （開鑼拍與間隔拍 crossed 為 0 就不記）。
             if (crossed > 0) run.pendingSkippedBuckets = crossed;
             run.pendingTicks += 1;
-            run.driverQueuedAtTick = run.world.data.clock.currentTick;
+            run.lastBeatAtMs = nowMs;
             queued = true;
         }
         // 佇列裡有話，或有一枚到期的起念——後者用 peek（`hasDueIntent` 不改狀態），
@@ -755,7 +781,8 @@ export class LabRunManager {
         const run = this.active.get(runId);
         if (run) {
             run.pendingTicks = 0;
-            run.driverQueuedAtTick = undefined;
+            run.tickFailures = 0;
+            run.lastBeatAtMs = undefined;
         }
         const meta = readRunMeta(runId);
         if (meta?.alive) {
@@ -891,7 +918,30 @@ export class LabRunManager {
                         });
                     }
                 }
+                // 夜的一拍是快轉（引擎讓全班睡去整併，零場景零拍）。拍流上什麼都
+                // 不留，讀者只看到死寂，分不清是世界睡了還是程式壞了——鏡像時間裡
+                // 這一段長達真實八小時。所以夜裡每個時辰留一行世界話：世界在睡，
+                // 不是停擺。一時辰一行，不隨拍數重複。
+                if (report.beats === 0 && report.night) {
+                    const nightKey = `${report.day}:${report.partOfDay}`;
+                    if (run.lastNightNoticeKey !== nightKey) {
+                        run.lastNightNoticeKey = nightKey;
+                        this.pushBeat(run, {
+                            day: report.day,
+                            tick: report.tick,
+                            clock: report.partOfDay,
+                            sceneId: '__world__',
+                            sceneName: '春雪社',
+                            isPrivate: false,
+                            characterId: '__world__',
+                            name: '天時',
+                            text: report.partOfDay === '深宵' ? '夜過三更，班子睡熟了，只有更聲。' : '夜深了，燈一盞盞暗下去，班子陸續歇下。',
+                            kind: 'world',
+                        });
+                    }
+                }
                 run.pendingTicks -= 1;
+                run.tickFailures = 0; // 落地一拍，前帳一筆勾銷
                 this.appendTickRecord(run, report, mirrorRealMsForThisTick);
                 // 時光快照 — freeze the just-committed world as this tick's
                 // checkpoint so 演員訪談室 can visit "the character right after
@@ -927,6 +977,12 @@ export class LabRunManager {
             run.pendingSkippedBuckets = undefined;
             run.lastError = error instanceof Error ? error.message : String(error);
             this.log(run, `[fatal] ${run.lastError}`);
+            // 連著走不動就自行收班：既不凍在原地等人發現，也不背著人一直重試燒錢。
+            run.tickFailures = (run.tickFailures ?? 0) + 1;
+            if (run.meta.alive && run.tickFailures >= AUTO_REST_AFTER_FAILURES) {
+                this.log(run, `[歇班] 連 ${run.tickFailures} 拍走不動，班子自行歇了——看上面那行 fatal，修好再點「開演」。`);
+                this.pause(run.meta.id);
+            }
         } finally {
             run.busy = false;
             this.persistStatus(run);
