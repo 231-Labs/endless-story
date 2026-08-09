@@ -39,25 +39,63 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
     const iconButton =
         'es-icon-button !h-9 !w-9 text-[15px] disabled:opacity-35 disabled:hover:border-hairline';
 
+    // ── 狀態章（世界在做什麼）+ 開關（班子上不上工），併為一枚 ──────────
+    const isError = snapshot.phase === 'error';
+    const mirror = snapshot.timeMode === 'mirror';
+    const alive = snapshot.alive;
+    // 章面只寫一個字（或佇列數）：走拍中報還剩幾拍，靜下來報班子在不在。
+    const stateLabel = isError ? '!' : running ? String(snapshot.pendingTicks) : mirror ? (alive ? '活著' : '歇班') : '靜';
+    const stateTitle = isError
+        ? '出錯（詳見下方）'
+        : running
+            ? `走拍中 · 佇列尚餘 ${snapshot.pendingTicks} 拍${mirror ? (alive ? '（班子活著，時辰邊界自走）· 點一下歇班' : '（班子歇著，這是手撥的拍）· 點一下讓它活著') : ''}`
+            : mirror
+                ? alive
+                    ? '活著 · 與現實同刻，時辰邊界自走——點一下讓班子歇著'
+                    : '歇班 · 世界的時間照走，只是無人搬演——點一下讓它活著'
+                : '靜場';
+    const chipClass = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-serif text-2xs tracking-[0.2em] ${
+        isError
+            ? 'border-cinnabar/60 text-cinnabar'
+            : running || (mirror && alive)
+                ? 'border-cinnabar/40 text-ink/85'
+                : 'border-hairline text-mute'
+    }`;
+    const dotClass = `h-1.5 w-1.5 shrink-0 rounded-full ${
+        isError
+            ? 'bg-cinnabar'
+            : running || (mirror && alive)
+                ? 'animate-lab-live-dot bg-cinnabar'
+                : mirror
+                    ? 'bg-mute/40'
+                    : 'bg-jade/70'
+    }`;
+
     return (
         <div className="flex flex-wrap items-center gap-2">
-            <span
-                title={running ? `走拍中 · 佇列尚餘 ${snapshot.pendingTicks} 拍` : snapshot.phase === 'error' ? '出錯（詳見下方）' : '靜場'}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-serif text-2xs tracking-[0.2em] ${
-                    snapshot.phase === 'error'
-                        ? 'border-cinnabar/60 text-cinnabar'
-                        : running
-                            ? 'border-cinnabar/40 text-ink/85'
-                            : 'border-hairline text-mute'
-                }`}
-            >
-                <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                        running ? 'bg-cinnabar animate-lab-live-dot' : snapshot.phase === 'error' ? 'bg-cinnabar' : 'bg-jade/70'
-                    }`}
-                />
-                {running ? snapshot.pendingTicks : snapshot.phase === 'error' ? '!' : '靜'}
-            </span>
+            {/* 世界此刻的狀態 —— 只此一枚章，而它本身就是「活著」的開關（鏡像卷）。
+                先前一列裡兩顆點各說各話（演繹狀態一顆、自走開關一顆），誰也不知道
+                哪個才算數；併章之後：章面說世界正在做什麼，點一下換班子上下工。 */}
+            {mirror ? (
+                <button
+                    type="button"
+                    disabled={busy === 'alive'}
+                    onClick={() =>
+                        act('alive', () => labApi.control(snapshot.runId, { action: 'alive', on: !alive }))
+                    }
+                    title={stateTitle}
+                    aria-pressed={alive}
+                    className={`${chipClass} transition hover:border-cinnabar/60 disabled:opacity-50`}
+                >
+                    <span className={dotClass} />
+                    {stateLabel}
+                </button>
+            ) : (
+                <span title={stateTitle} className={chipClass}>
+                    <span className={dotClass} />
+                    {stateLabel}
+                </span>
+            )}
 
             <button
                 type="button"

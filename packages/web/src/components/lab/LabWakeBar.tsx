@@ -1,19 +1,19 @@
 'use client';
 
 /**
- * LabWakeBar — 喚醒氣口。mirror 卷專屬（tick 卷回傳 null），**不自成一行**：
- * 它靠 `ml-auto` 貼在走拍控制列的右端——header 只有一層，日期與活時鐘
- * 題在副標裡（run 頁的 subtitle），不另設日期橫條。
+ * LabWakeBar — 捎話。mirror 卷專屬（tick 卷回傳 null），**不自成一行**：
+ * 靠 `ml-auto` 貼在走拍控制列的右端——header 只有一層，日期與活時鐘題在
+ * 副標裡（run 頁的 subtitle），不另設日期橫條。
  *
- * 語彙照 AGENT_WAKE_LAYER.md 附錄 A 的戲班用語——「捎話」不是「戳」；
- * 開關兩態是「活著／歇班」——「歇班」不是「靜止」，班子下班了，世界的
- * 時間照走；也避免與控制列的「靜（場）」狀態章撞字。
+ * 這裡**只有捎話**：「活著／歇班」的開關已併進控制列那枚狀態章
+ * （見 LabControls）——世界的狀態與開關同一枚，一列裡不該有兩顆點各說各話。
  *
- * 兩個氣口都只是文字，沒有框也沒有膠囊——任何一枚按鈕的邊都會搶戲。
- * 捎話採漸進揭露：平時只有兩個字，點開才在原位長出「給 誰：一句話」。
+ * 語彙照 AGENT_WAKE_LAYER.md 附錄 A 的戲班用語——「捎話」不是「戳」。
+ * 純文字、沒有框也沒有膠囊（按鈕的邊會搶戲），採漸進揭露：平時只有兩個字，
+ * 點開才在原位長出「給 誰：一句話」。
  *
- * 「活著」打 control alive；捎話送出一句話進折子佇列，engine 的 runInterludes
- * 之後在幾十秒內給出回應（debounce 窗 + driver 巡佇列間隔，見 manager.ts）。
+ * 捎話送出一句話進折子佇列，engine 的 runInterludes 之後在幾十秒內給出回應
+ * （debounce 窗 + driver 巡佇列間隔，見 manager.ts）。
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -37,7 +37,6 @@ export function LabWakeBar({
     onChanged: () => void;
 }) {
     const toast = useToast();
-    const [toggling, setToggling] = useState(false);
     const [characterId, setCharacterId] = useState('');
     const [text, setText] = useState('');
     const [sending, setSending] = useState(false);
@@ -66,23 +65,10 @@ export function LabWakeBar({
     }, [composing]);
 
     if (snapshot.timeMode !== 'mirror') return null;
-    const alive = snapshot.alive;
     // 誰此刻正做著一件要花時間的事（角色自陳的 activity，喚醒層 P2）——捎話之前
     // 先看得見對方在忙什麼，「柳安春（排戲中）」比一個光禿禿的名字有人味得多。
     const activityByChar = new Map(snapshot.activities.map((a) => [a.characterId, a.what]));
     const canSend = Boolean(characterId) && Boolean(text.trim()) && !sending;
-
-    const toggleAlive = async () => {
-        setToggling(true);
-        try {
-            await labApi.control(runId, { action: 'alive', on: !alive });
-            onChanged();
-        } catch (e) {
-            toast(e instanceof Error ? e.message : String(e), 'error');
-        } finally {
-            setToggling(false);
-        }
-    };
 
     const sendStimulus = async () => {
         const body = text.trim();
@@ -104,20 +90,6 @@ export function LabWakeBar({
 
     return (
         <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
-                <button
-                    type="button"
-                    disabled={toggling}
-                    onClick={() => void toggleAlive()}
-                    title={alive ? '活著 · 與現實同刻——點一下讓班子歇著' : '歇班——點一下讓這一卷與現實同刻活著'}
-                    className="group inline-flex items-center gap-1.5 font-serif text-2xs tracking-[0.2em] transition disabled:opacity-50"
-                >
-                    <span
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${alive ? 'animate-lab-live-dot bg-cinnabar' : 'bg-mute/40'}`}
-                    />
-                    <span className={`${alive ? 'text-ink/85' : 'text-mute'} ${QUIET_LINK} group-hover:text-ink group-hover:underline`}>
-                        {alive ? '活著' : '歇班'}
-                    </span>
-                </button>
 
                 {composing ? (
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1 font-serif text-xs">
