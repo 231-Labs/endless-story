@@ -95,6 +95,26 @@ test('the show line is gated to SHOW_PARTS — 清晨 carries no show stake', ()
     assert.doesNotMatch(brief, /開鑼時人要在台上/, '清晨 is too early to brief the night show');
 });
 
+test('a worn body past FATIGUE_REST_SEEK surfaces a NEUTRAL rest line by day, none at night', () => {
+    const world = briefWorld();
+    const liu = world.castById(world.idByName('柳安春')!)!;
+    liu.state.fatigue = 0.85; // past FATIGUE_REST_SEEK (0.7)
+    assert.ok(world.data.homeByChar[liu.id], '柳安春 has a home to rest in');
+
+    const day = briefFor(world, '柳安春', '日午') ?? '';
+    assert.match(day, /歇一歇/, 'a rest line is surfaced by day');
+    assert.doesNotMatch(day, /歇過再說/, 'neutral framing — never forced-first');
+
+    // 入夜 walks the tired home mechanically (spatial routing) — no line needed.
+    const night = briefFor(world, '柳安春', '入夜') ?? '';
+    assert.doesNotMatch(night, /歇一歇/, 'night carries no rest line');
+
+    // Below the threshold tiredness stays an undertone (stateLine), not a stake.
+    liu.state.fatigue = 0.5;
+    const fresh = briefFor(world, '柳安春', '日午') ?? '';
+    assert.doesNotMatch(fresh, /歇一歇/, 'mild tiredness is not a stake');
+});
+
 test('a non-troupe outsider gets no show/生計 stake (their living is elsewhere)', () => {
     const world = briefWorld();
     // 方競西 (記者, 申報館) is not on the 班庫 payroll nor a lead → not troupe.

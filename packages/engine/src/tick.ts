@@ -59,6 +59,7 @@ import { drainPendingDreams } from './core/dream.ts';
 import { drainInterludePercepts } from './interlude.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
 import { settleBackgroundNeeds } from './core/background-needs.ts';
+import { advanceDailyState, bucketOrdinalOf, elapsedBucketSteps, partOfBucket } from './core/state-rhythm.ts';
 import {
     availableActsFor,
     canPropose,
@@ -2816,11 +2817,27 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     }
 
     // 5) Advance the daily-life state vector (undertone; derived, persisted).
+    // 作息節律 (state-rhythm): settled against STORY TIME (時辰 buckets), never per
+    // heartbeat. Mirror time makes a tick 演繹的心跳 only — a second heartbeat
+    // inside the same 時辰 charges nothing, and 時辰 that passed un-rendered
+    // (停機、夜裡無人搬演) settle here once each, so the cast wakes RESTED after a
+    // quiet night instead of carrying an afternoon of stacked act-costs. In tick
+    // mode the walk is always exactly one step (each tick IS a new 時辰).
+    const settledBucket = bucketOrdinalOf(c);
+    const rhythmSteps = elapsedBucketSteps(w.stateSettledBucket, settledBucket, perDay, (bucketOfDay) =>
+        // Night-ness of a crossed bucket stays the ClockPort's verdict — a
+        // synthetic reading at that bucket, so LocalClock's nightFrom and the
+        // mirror night parts both keep their authority.
+        clock.isNight({ currentTick: nowTick, ticksPerDay: perDay, day: today, tickOfDay: bucketOfDay, partOfDay: partOfBucket(bucketOfDay, perDay) }),
+    );
     for (const m of world.activeCast()) {
-        const acted = actedCharacterIds.includes(m.id);
-        m.state.fatigue = Math.max(0, Math.min(1, m.state.fatigue + (night ? -0.4 : acted ? 0.12 : 0.05)));
-        m.state.hunger = Math.max(0, Math.min(1, c.tickOfDay === 0 ? 0.15 : m.state.hunger + 0.12));
+        m.state = advanceDailyState(m.state, rhythmSteps, {
+            acted: actedCharacterIds.includes(m.id),
+            // 小憩 gate: at one's own home right now (roster holds the tick's real position).
+            atHome: w.roster[m.id] !== undefined && w.roster[m.id] === w.homeByChar[m.id],
+        });
     }
+    w.stateSettledBucket = Math.max(w.stateSettledBucket ?? settledBucket, settledBucket);
 
     // 6) WEAVE the tick's public beats into one 回 (private windows stay off it).
     let wove = false;

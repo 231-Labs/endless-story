@@ -19,6 +19,7 @@
  * Pure: reads the world + precomputed maps, mutates nothing.
  */
 
+import { isNightPart } from '@endless-story/shared/world-clock';
 import { formatMoney, type SeasonCatalogItem } from './season-economy.ts';
 import { dutyRhythm } from './livelihood-rhythm.ts';
 import { confideWorry, hasHostileWantToward, type Want } from './want-core.ts';
@@ -29,6 +30,12 @@ import { renownLabel, type CastMember, type WorldState } from '../world-state.ts
 /** Pressing hunger — the belly is worth surfacing as ONE stake (demoted from the
  *  old forced-first rank). Below this, hunger is a mere undertone (stateLine). */
 export const HUNGER_SEEK = 0.55;
+
+/** Worn past working — fatigue above this is worth surfacing as ONE stake with
+ *  an actionable answer: go home and rest a beat (the 小憩 recovery in
+ *  `state-rhythm.ts` makes the advice mechanically real). Below this, tiredness
+ *  stays a mere undertone (stateLine's 有些倦／乏得緊). */
+export const FATIGUE_REST_SEEK = 0.7;
 
 /** The parts of day where tonight's show is imminent enough to brief the leads /
  *  troupe on it (排練收工、開鑼、燈已上): 晡時 (afternoon wind-down) → 入夜. */
@@ -146,6 +153,17 @@ export function buildStakesBrief(input: StakesBriefInput): string | undefined {
             const priceText = formatMoney(econ, BigInt(meal.priceSubunits));
             lines.push(`你此刻腹中空，得空可往「${foodSceneName}」墊墊（一份${meal.label}${priceText}）。`);
         }
+    }
+
+    // 身子・乏 (rest) — a body worn past FATIGUE_REST_SEEK is a stake of its own,
+    // framed NEUTRALLY like the hunger line (never『歇過再說』): name the home and
+    // the option; decideMove weighs it against the day's other stakes. Day parts
+    // only — 入夜/深宵 already walk the tired home mechanically (spatial routing),
+    // so a night line would be noise. The advice is real: a beat spent at home
+    // without acting recovers fatigue (the 小憩 arm of state-rhythm).
+    const restHomeId = w.homeByChar[member.id];
+    if (!isNightPart(clockLabel) && member.state.fatigue >= FATIGUE_REST_SEEK && restHomeId && restHomeId !== currentSceneId) {
+        lines.push(`你身上乏得狠了——得空回「${world.sceneNameById(restHomeId)}」歇一歇，養養精神。`);
     }
 
     // 心事・夜訪 (kept, as OPTION) — at 黃昏/入夜/深宵 a pressing non-romantic worry may
