@@ -253,7 +253,10 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
                 model: modelId,
                 system: '你只做認識論標記，不續寫故事，不創造證據。',
                 messages: [{ role: 'user', content: buildClaimAuditPrompt(dossierEvent, dossierSources) }],
-                maxTokens: 1800,
+                // 一次寫完**全部** POV：每份要一句 24-52 字的專屬導語＋1-4 條 claim，
+                // 每條 claim 又帶 20-70 字的 editorialNote。四個 POV 就已一千多個
+                // 中文字，1800 保不住最後那幾份（剪掉的落成空卷宗，看起來像編輯偷懶）。
+                maxTokens: 3600,
                 temperature: 0.2,
             });
             dossierSources = applyClaimAudit(dossierEvent, dossierSources, audited.text);

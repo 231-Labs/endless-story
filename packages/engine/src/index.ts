@@ -5,10 +5,17 @@
  * NO Next.js. Infra is behind pluggable ports (src/ports.ts); the M0 default
  * backend is local (fake agent / JSON recall / markdown archive). See README.md.
  *
- * This barrel is node-clean: it never eagerly imports `@endless-story/runner`
+ * This barrel is node-clean: it never eagerly imports runner's tsx-only graph
  * (whose `.js` specifiers only resolve under tsx / a bundler), so it loads under
  * `node --test`. The real-LLM RunnerSceneAgent lives at
  * `@endless-story/engine/adapters/runner` and is loaded only by the CLI.
+ *
+ * The one allowed exception is a runner LEAF that imports nothing itself —
+ * today `@endless-story/runner/infra/json-loose`, pulled in by
+ * core/want-rewrite.ts so the truncated-JSON repair has exactly one
+ * implementation instead of a mirror that drifts. That leaf carries a standing
+ * no-imports rule in its own header; break it and every test here fails to
+ * resolve at once (loudly, which is the point).
  */
 
 // Pure narrative core (relocated from web/lib/chain).

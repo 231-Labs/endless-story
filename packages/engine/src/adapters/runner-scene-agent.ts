@@ -255,7 +255,10 @@ export class RunnerSceneAgent implements SceneAgentPort {
                             ? prompt
                             : `${prompt}\n\n【上次輸出未通過】\n${lastErrors.join('\n')}\n請重新輸出完整 JSON，必須有以角色姓名開頭的專屬 lead、1–4 個主觀 claim，並覆蓋每個 p:N。`,
                     }],
-                    maxTokens: 1500,
+                    // 一份卷宗：24-52 字的專屬導語＋1-4 條 claim，每條帶 20-70 字的
+                    // editorialNote；寫滿就是四五百個中文字，1500 常剪在最後一條，
+                    // 而少一條就過不了 validateClaimAudit，白跑一次重試。
+                    maxTokens: 2400,
                     temperature: attempt === 0 ? 0.32 : 0.15,
                 });
                 const [curated] = eventDossier.applyClaimAudit(event, [source], response.text);

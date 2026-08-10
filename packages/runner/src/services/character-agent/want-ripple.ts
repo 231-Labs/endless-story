@@ -53,8 +53,9 @@ export async function judgeRipples(input: RippleJudgeInput): Promise<RippleJudge
         if (wasTruncated(obj)) {
             console.warn(`[want-ripple] 回話被剪斷，已撿回可用的部分（${input.sceneName}）`);
         }
-        if (!obj) {
-            // 空陣列是合法答案（沒人被牽動），解析不到不是——兩者要分得清。
+        // `{"ripples":[]}` 是合法答案（這場沒牽動誰）；解析不到、或回了個沒有
+        // ripples 的東西，都是失敗。兩者落到呼叫端都是空陣列，只有這裡分得清。
+        if (!Array.isArray(obj?.ripples)) {
             console.warn(
                 `[want-ripple] ${input.sceneName} 的牽動判不出來（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
             );
