@@ -14,13 +14,14 @@
   },
   "scripts": {
     "type-check": "tsc --noEmit",
-    "test": "node --test \"test/**/*.test.ts\""
+    "test": "node --import tsx --test \"test/**/*.test.ts\""
   },
   "dependencies": {
     "@noble/hashes": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "tsx": "^4.19.0",
     "typescript": "^5.5.0"
   }
 }

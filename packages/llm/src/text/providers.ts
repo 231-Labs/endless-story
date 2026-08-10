@@ -46,6 +46,25 @@ export class LLMHttpError extends Error {
   }
 }
 
+/**
+ * 這顆模型是不是根本不在了——下架、改名、或這把 key 沒有權限？
+ *
+ * 與 {@link isRetryableError} 不同：重試**同一個 id** 毫無意義（Poe 對下架的
+ * bot 連回三次一模一樣的 404），但換**下一顆**正是該做的事。把兩者混為一談，
+ * 就是一顆下架的 bot 能拖垮整卷的原因：`GLM-5.1-FW` 回 404、404 不算可重試，
+ * 於是 `chatWithFallback` 在第一順位就拋出去，後面三顆健康的備援一顆都沒碰到。
+ */
+export function isModelUnavailableError(err: unknown): boolean {
+  const status = err instanceof LLMHttpError ? err.status : (err as { status?: number })?.status;
+  const msg = ((err as { message?: string })?.message ?? '').toLowerCase();
+  if (status === 404) return true;
+  // 有些供應商把「不認得的模型」報成 400 參數錯誤。
+  if (status === 400) {
+    return /model.*(not found|not exist|unavailable|not deployed|inaccessible)|unknown model|invalid model/.test(msg);
+  }
+  return false;
+}
+
 /** Is this an overload / transient / rate-limit error worth retrying with another model? */
 export function isRetryableError(err: unknown): boolean {
   if (err instanceof LLMHttpError) {

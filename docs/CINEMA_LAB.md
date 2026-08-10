@@ -292,8 +292,36 @@ cookie（30 天），`/lab/*` 頁面與 `/api/lab/*` 全部驗同一把（API �
 |---|---|
 | `ZAI_API_KEY` 或 `POE_API_KEY` 或 `ANTHROPIC_API_KEY` | 實錄檔文字模型（排演檔不需要） |
 | `AI_PROVIDER` | `auto`（預設）/ `zai` / `poe` / `anthropic` |
+| `POE_MODEL_PRIMARY` / `POE_MODEL_CHEAP` | 選配：覆寫 Poe 模型。**留空最安全**，預設走成本紀律定的 `GLM-4.6` |
 | `CHARACTER_SESSION_KEY` | 選配：AES-256-GCM 加密角色 session 檔 |
 | `OPENAI_API_KEY` | 僅當開 `realEmbeddings`（召回用真向量）才需要 |
+
+#### 一拍都不出來？先查 Poe 模型 id
+
+實錄檔整卷零拍流，八成不是引擎，是 Poe 那頭的模型 id。兩種死法長得都不像模型問題：
+
+1. **id 被下架**。Poe 直接刪 bot，不留相容別名，舊 id 回 **404**（`GLM-5.1-FW`、
+   `GLM-4.7-FlashX`、`Claude-Opus-4.1`⋯）或 **500**（`GLM-4.7-N`），不是「請改用
+   新版」那種好心的錯誤。
+2. **HTTP 200 但內容是空的**。Poe 把 reasoning 算進 `max_tokens` 而且關不掉
+   （`thinking:{type:'disabled'}` 被忽略）。想完就沒額度寫答案，回來 `content`
+   是空字串。這顆已由 `GLM_REASONING_HEADROOM_TOKENS` 與空回擲錯處理掉。
+
+兩顆疊起來最兇：空回擲出可重試的 503、鏈往下走一格，而下一格如果是一具屍體，
+就從「靜靜回空」升級成「當場硬死」。所以 `fallback.ts` 另備一道
+`isModelUnavailableError`：404 只花一跳換下一顆，不重試不退避。
+
+查活目錄：
+
+```bash
+curl -s https://api.poe.com/v1/models -H "Authorization: Bearer $POE_API_KEY" | jq -r '.data[].id' | grep glm
+```
+
+**Zeabur 上若手動釘過 `POE_MODEL_PRIMARY` / `POE_MODEL_CHEAP`，記得回去對一次。**
+env 蓋過程式預設，改了程式也救不了一個寫死在後台的死 id。
+
+換過模型 id 之後，**既有的卷不能直接續開**：`run-manifest.json` 的溯源核對會擋下
+「一卷中途換模型」。開新卷即可；真要沿用某一長卷，手改該卷 manifest 的 `model` 欄。
 
 長 tick 無虞：自架 VPS 上 Next 常駐 process，lab 的 tick 迴圈跑在 in-process
 promise chain（同 `/api/tick` 的模式），沒有 serverless 時限；容器重啟時
