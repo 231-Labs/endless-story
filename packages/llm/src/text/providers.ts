@@ -18,6 +18,9 @@ const ZAI_MIN_MAX_TOKENS = 1024;
 /** A provider that never answers must not hold an atomic world tick forever.
  * Three minutes still accommodates slow creative calls; fallback owns retry. */
 const REQUEST_TIMEOUT_MS = 180_000;
+/** 留給 GLM 推理的額度（Poe 忽略關閉旗標時的保命符）。實測一次思考吃掉一兩千
+ *  token；留三千，答案才有地方寫。關得掉的通道（Z.AI 直連）用不到這筆。 */
+const GLM_REASONING_HEADROOM_TOKENS = 3000;
 
 function boundedSignal(callerSignal?: AbortSignal): AbortSignal {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
@@ -104,12 +107,12 @@ export async function callZAI(apiKey: string, baseUrl: string, req: ChatRequest)
   }
 
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{ message?: { content?: string; reasoning_content?: string }; finish_reason?: string }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
 
   return {
-    text: data.choices?.[0]?.message?.content ?? '',
+    text: requireText('zai', req.model, data.choices?.[0], data.usage),
     model: req.model,
     provider: 'zai',
     usage:
@@ -117,6 +120,37 @@ export async function callZAI(apiKey: string, baseUrl: string, req: ChatRequest)
         ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens }
         : undefined,
   };
+}
+
+
+/**
+ * 空回是事故，不是答案。
+ *
+ * OpenAI 相容端點在幾種情形下會**成功回應但 content 一個字都沒有**：推理型模型
+ * 把 max_tokens 全花在 reasoning 上（`finish_reason: 'length'`，實錄：一次呼叫想了
+ * 32 秒回一個空字串，滿場角色一件心事都長不出來）、內容被安全層攔掉、或整段答案
+ * 被放進 `reasoning_content` 那類非標準欄位。
+ *
+ * 原本這裡一律 `?? ''` 靜靜回空——空字串一路流到解析器，解析器回空值，世界靜止，
+ * 而日誌上什麼都沒有。改為：先撿非標準欄位（答案真在那兒就用），真的什麼都沒有
+ * 就**擲出可重試的錯誤**，讓 fallback 換一顆模型去試——這正是 fallback 鏈存在的
+ * 理由，先前它對這種失敗完全看不見。
+ */
+function requireText(
+  provider: 'zai' | 'poe' | 'anthropic',
+  model: string,
+  choice: { message?: { content?: string; reasoning_content?: string }; finish_reason?: string } | undefined,
+  usage: { completion_tokens?: number } | undefined,
+): string {
+  const content = choice?.message?.content?.trim();
+  if (content) return content;
+  // 有些推理型模型把整段答案放在 reasoning 欄；答案在那兒就用，別浪費一次呼叫。
+  const reasoning = choice?.message?.reasoning_content?.trim();
+  if (reasoning) return reasoning;
+  const why = choice?.finish_reason === 'length'
+    ? `finish_reason=length（輸出額度用盡；completion_tokens=${usage?.completion_tokens ?? '?'}——推理型模型多半是把額度花在思考上了，換一顆不思考的模型或關掉 thinking）`
+    : `finish_reason=${choice?.finish_reason ?? 'unknown'}`;
+  throw new LLMHttpError(503, provider, model, `空回：模型回應成功但一個字都沒有（${why}）`);
 }
 
 /** POST to Poe's OpenAI-compatible endpoint. */
@@ -128,20 +162,24 @@ export async function callPoe(apiKey: string, req: ChatRequest): Promise<ChatRes
   messages.push(...req.messages.map((m) => ({ role: m.role, content: m.content })));
 
   const needsThinking = THINKING_MODELS.has(req.model);
+  // GLM 在 Poe 這頭預設開著推理。我們照送官方的關閉旗標（Z.AI 直連確實吃這一套），
+  // 但**實測 Poe 對它家的 GLM bot 忽略它**：一次呼叫想了 32 秒，`content` 回來一個
+  // 字都沒有——推理把 max_tokens 花光了，答案沒地方寫（滿場角色一件心事都長不出來，
+  // 世界完全靜止）。關不掉，就替它留位置：推理的額度另計，別跟答案搶。
+  //
+  // 這不是多花錢——想是照樣想、照樣計費，先前只是想完之後我們沒拿到東西。
+  const glm = /glm/i.test(req.model);
+  const reasoningHeadroom = glm && !needsThinking ? GLM_REASONING_HEADROOM_TOKENS : 0;
   const body: Record<string, unknown> = {
     model: req.model,
     messages,
-    max_tokens: needsThinking ? Math.max(req.maxTokens, 4096) : req.maxTokens,
+    max_tokens: needsThinking ? Math.max(req.maxTokens, 4096) : req.maxTokens + reasoningHeadroom,
     stream: false,
   };
   if (needsThinking) {
     body.thinking = { type: 'enabled', budget_tokens: req.thinking?.budgetTokens ?? Math.max(2048, req.maxTokens) };
   } else {
-    // GLM models default thinking ON at the Poe/Z.AI backend; without an explicit
-    // `disabled` flag every call pays a ~3x reasoning tax (and can truncate output).
-    // callZAI always sends the flag; this Poe path never did. Scope to GLM so the
-    // non-GLM Poe models (GPT / Gemini / Claude) that may reject the field are left alone.
-    if (/glm/i.test(req.model)) body.thinking = { type: 'disabled' };
+    if (glm) body.thinking = { type: 'disabled' };
     if (typeof req.temperature === 'number') body.temperature = req.temperature;
   }
 
@@ -161,12 +199,12 @@ export async function callPoe(apiKey: string, req: ChatRequest): Promise<ChatRes
   }
 
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{ message?: { content?: string; reasoning_content?: string }; finish_reason?: string }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
 
   return {
-    text: data.choices?.[0]?.message?.content ?? '',
+    text: requireText('poe', req.model, data.choices?.[0], data.usage),
     model: req.model,
     provider: 'poe',
     usage:
