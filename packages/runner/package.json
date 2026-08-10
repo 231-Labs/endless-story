@@ -12,7 +12,8 @@
     "./services/event-dossier/compile": "./src/services/event-dossier/compile.ts",
     "./services/storyteller-chapter/anthology": "./src/services/storyteller-chapter/anthology.ts",
     "./services/*": "./src/services/*/index.ts",
-    "./types": "./src/types/index.ts"
+    "./types": "./src/types/index.ts",
+    "./infra/json-loose": "./src/infra/json-loose.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit",
