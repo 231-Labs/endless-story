@@ -7,6 +7,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 export interface DeriveWantsInput {
     name: string;
@@ -92,19 +93,6 @@ export function buildUserPrompt(input: DeriveWantsInput): string {
     ].join('\n');
 }
 
-function extractJson(raw: string): Record<string, unknown> | null {
-    const blocks = raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            return JSON.parse(blocks[i]) as Record<string, unknown>;
-        } catch {
-            /* try an earlier block */
-        }
-    }
-    return null;
-}
-
 const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const n = (v: unknown, lo: number, hi: number, dflt: number): number =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : dflt;
@@ -113,8 +101,15 @@ export function parseGenesisWants(
     raw: string,
     castNames?: string[],
     resourceLabels?: string[],
+    /** 誰的心事（只進日誌，讓截斷警告能對上人）。 */
+    who?: string,
 ): GenesisWant[] {
-    const obj = extractJson(raw);
+    const obj = extractJsonLoose(raw);
+    // 撿回來的那幾件仍然算數（每一件都是完整的物件；殘缺的半件已在修復時丟掉），
+    // 但要喊出聲——一整批角色連著被剪，就是 maxTokens 又不夠了。
+    if (wasTruncated(obj)) {
+        console.warn(`[want-genesis] 回話被剪斷，已撿回可用的部分${who ? `（${who}）` : ''}`);
+    }
     const arr = Array.isArray(obj?.wants) ? (obj!.wants as unknown[]) : [];
     const out: GenesisWant[] = [];
     for (const item of arr.slice(0, 5)) {
@@ -142,8 +137,14 @@ export function parseGenesisWants(
     return out;
 }
 
-/** Derive genesis wants for one character. Returns [] on any failure (caller
- *  may retry next tick; a character without wants simply idles). */
+/**
+ * Derive genesis wants for one character. Returns [] on any failure (caller
+ * may retry next tick; a character without wants simply idles).
+ *
+ * 空手不是合法答案：題目就寫著 3-5 件，一件都沒有必然是解析或回話出事。
+ * 這裡一定喊出聲——沒有心事的角色無事可做，滿場 `action noop`，世界靜止，
+ * 而呼叫端只看得見一個空陣列（實錄：12 個角色 0 genesis、liveWants 0）。
+ */
 export async function deriveGenesisWants(input: DeriveWantsInput): Promise<GenesisWant[]> {
     try {
         const client = llmText.createTextClient({ kind: 'primary' });
@@ -151,14 +152,25 @@ export async function deriveGenesisWants(input: DeriveWantsInput): Promise<Genes
             model: client.defaultModel,
             system: buildSystemPrompt(),
             messages: [{ role: 'user', content: buildUserPrompt(input) }],
-            maxTokens: 700,
+            // 3-5 件心事，每件都要 layer/desc/target/resource/weight/sat/resistance
+            // ＋一句 why；中文一字常吃一到兩個 token，700 幾乎必然剪在第三、四件
+            // 中途。寬到五件連 why 都寫得完為止（一角一生只跑一次，貴得起）。
+            maxTokens: 1600,
             temperature: 0.7,
         });
-        return parseGenesisWants(
+        const wants = parseGenesisWants(
             res.text,
             input.castNames,
             input.contestedResources?.map((r) => r.label),
+            input.name,
         );
+        if (wants.length === 0) {
+            // 附上回話開頭：冷讀時要一眼分得出「模型交白卷」「不是 JSON」「配額打回」。
+            console.warn(
+                `[want-genesis] ${input.name} 一件心事都沒長出來（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
+            );
+        }
+        return wants;
     } catch (err) {
         console.warn('[want-genesis] derive failed:', err instanceof Error ? err.message : err);
         return [];
@@ -203,10 +215,14 @@ export async function assessResourceAffinity(input: AffinityInput): Promise<Map<
                             .join('\n')}`,
                 },
             ],
+            // 只回索引＋抄回的清單原文，沒有一句散文；300 綽綽有餘，不必放寬。
             maxTokens: 300,
             temperature: 0.2,
         });
-        const obj = extractJson(res.text);
+        const obj = extractJsonLoose(res.text);
+        if (wasTruncated(obj)) {
+            console.warn(`[want-genesis] 回話被剪斷，已撿回可用的部分（${input.name} 的爭奪歸屬）`);
+        }
         const arr = Array.isArray(obj?.ties) ? (obj!.ties as unknown[]) : [];
         const labels = new Set(input.contestedResources.map((r) => r.label));
         for (const item of arr) {
@@ -255,10 +271,14 @@ export async function deriveAftermathWant(input: AftermathInput): Promise<Genesi
                         `\n\n# 那場戲\n${input.beats.join('\n')}`,
                 },
             ],
-            maxTokens: 300,
+            // 至多一條，但那條照樣要 layer/desc/weight/sat/resistance ＋一句 why；
+            // 300 剛好卡在 why 上（撿得回來，但每次都撿等於每次都少一半）。
+            maxTokens: 600,
             temperature: 0.8,
         });
-        const wants = parseGenesisWants(res.text);
+        // 這裡空手是合法答案（乾淨收束就不該硬長新心事），所以不喊；
+        // 只有截斷會由 parseGenesisWants 自己喊。
+        const wants = parseGenesisWants(res.text, undefined, undefined, input.name);
         return wants[0] ?? null;
     } catch (err) {
         console.warn('[want-genesis] aftermath failed:', err instanceof Error ? err.message : err);

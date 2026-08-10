@@ -1,8 +1,9 @@
 /**
  * Character Agent — BEAT PROMPT (pure leaf, node-clean).
  * ============================================================================
- * Everything here is a pure string builder / derivation with ZERO imports — no
- * `@endless-story/llm`, no `.js` specifiers — so it loads under plain
+ * Everything here is a pure string builder / derivation — no
+ * `@endless-story/llm`, no `.js` specifiers (only explicit `.ts` / package
+ * subpaths that resolve bare) — so it loads under plain
  * `node --test` type-stripping. The engine package's mechanical tests import
  * this file directly (exports entry `./services/character-agent/beat-prompt`)
  * to assert prompt content (pronoun guard, gender note) without dragging the
@@ -11,6 +12,7 @@
  */
 
 import { toTraditional } from '@endless-story/shared/to-traditional';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 export type BeatForcing = 'idle' | 'pressing' | 'edge' | 'breaking';
 
@@ -274,9 +276,10 @@ export interface BeatResult {
      *   'empty-beat' —— JSON 有，但 beat 欄是空的（模型自己交了白卷）
      */
     silent?: 'no-json' | 'empty-beat';
-    /** 這一拍是從被截斷的輸出裡撈回來的（見 salvageTruncatedBeat）：話撈到了，
-     *  但結構性欄位（物件效果／銀錢／世情動作）一律棄用。呼叫端據此記一筆，
-     *  連著出現就是 maxTokens 該再放寬的訊號。 */
+    /** 這一拍是從被截斷的輸出裡撈回來的（見 infra/json-loose）：話撈到了，
+     *  但結構性欄位（物件效果／銀錢／世情動作）一律棄用——半截的指令進了世界
+     *  比沉默更糟，寧可只留下說出口的那句。呼叫端據此記一筆，連著出現就是
+     *  maxTokens 該再放寬的訊號。 */
     truncated?: true;
     /** Private thought, one line. */
     inner: string;
@@ -318,43 +321,14 @@ export interface BeatResult {
     act?: { id: string; targetName?: string };
 }
 
-function extractBeatJson(raw: string): Record<string, unknown> | null {
-    const blocks = raw.match(/\{[\s\S]*\}/g);
-    if (blocks?.length) {
-        for (let i = blocks.length - 1; i >= 0; i--) {
-            try { return JSON.parse(blocks[i]) as Record<string, unknown>; } catch { /* earlier block */ }
-        }
-    }
-    return salvageTruncatedBeat(raw);
-}
-
-/**
- * 撈回被截斷的一拍。
- *
- * 上面那個正規式要看到收尾的大括號才算數，於是輸出一被 max_tokens 剪斷，
- * 整拍就無從解析——角色當場「（沉默。）」。中文一個字往往吃掉一到兩個 token，
- * 話說得長的角色剛好卡在邊界上，同一拍裡有人開口有人啞掉，看起來像世界壞了
- * （實錄：滿場沉默、偶爾一句）。話都已經說完了，只是缺一個右括號；撈出來便是。
- *
- * 只撈 beat 與 inner 兩個純字串欄位——結構性欄位（物件效果、銀錢命令、世情動作）
- * 半截的寧可不要，殘缺的指令進了世界比沉默更糟。
- */
-function salvageTruncatedBeat(raw: string): Record<string, unknown> | null {
-    const field = (name: string): string | undefined => {
-        const m = raw.match(new RegExp(`"${name}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`));
-        if (!m) return undefined;
-        try { return JSON.parse(`"${m[1]}"`) as string; } catch { return m[1]; }
-    };
-    const beat = field('beat');
-    if (!beat?.trim()) return null;
-    const inner = field('inner');
-    return { beat, ...(inner ? { inner } : {}), truncated: true };
-}
-
 /** Shared by the stateless runner and the persistent-session adapter. */
 export function parseBeatResult(raw: string, actorName: string): BeatResult {
-    const parsed = extractBeatJson(raw);
+    const parsed = extractJsonLoose(raw);
     const o = parsed ?? {};
+    // 撈回來的一拍只認純字串欄位：修復器丟得掉殘缺的半個元素，卻分不出一個
+    // 「看起來完整」的指令是不是原本還有下半段（objectId 有了、visibility 沒了，
+    // 照樣過驗證）。半截的指令進了世界比沉默更糟，一律不收。
+    const truncated = wasTruncated(parsed);
     const str = (v: unknown): string => typeof v === 'string' ? v.trim() : '';
     const prose = (v: unknown): string => toTraditional(str(v));
     const esc = actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -435,7 +409,7 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
     return {
         beat: beatText || '（沉默。）',
         ...(beatText ? {} : { silent: parsed ? ('empty-beat' as const) : ('no-json' as const) }),
-        ...(o.truncated === true ? { truncated: true as const } : {}),
+        ...(truncated ? { truncated: true as const } : {}),
         inner: deName(prose(o.inner)),
         addressed: addressed && addressed !== '無' ? addressed : undefined,
         audience,
@@ -443,9 +417,9 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
         close: o.close === true ? true : undefined,
         intimacy: o.intimacy === 'advance' || o.intimacy === 'accept' || o.intimacy === 'decline' ? o.intimacy : undefined,
         pushWant,
-        objectEffects: objectEffects.length ? objectEffects : undefined,
-        economyCommands: economyCommands.length ? economyCommands : undefined,
-        act,
+        objectEffects: !truncated && objectEffects.length ? objectEffects : undefined,
+        economyCommands: !truncated && economyCommands.length ? economyCommands : undefined,
+        act: truncated ? undefined : act,
     };
 }
 

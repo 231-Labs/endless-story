@@ -12,6 +12,12 @@
  * 引號與括號再解析一次，並丟掉最後那個殘缺的元素（寧可少一件，不要一件半）。
  * 修復過的結果會標記 `__truncated`，呼叫端要據此喊出聲——**修得回來不等於
  * 沒事**，連著出現就是該把 maxTokens 放寬了。
+ *
+ * **此檔不得新增任何 import。** 它是跨套件共用的葉：engine 的 core（含 barrel）
+ * 靠 exports entry `@endless-story/runner/infra/json-loose` 直接吃它，而 engine
+ * 的測試跑在光禿禿的 `node --test` 上——runner 其餘檔案慣用的 `.js` 指名在那裡
+ * 解不到。多一個 import 就等於把整包 runner 拖進 engine 的模組圖，521 支測試會
+ * 當場解析失敗。要共用什麼，複製進來，別 import 出去。
  */
 
 /** 修復過的結果帶這個記號（非列舉欄位，呼叫端讀完即可刪）。 */
