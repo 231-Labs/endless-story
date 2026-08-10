@@ -197,6 +197,7 @@ event 讓在場者**結構性**得知，不靠操作者私語），engine 本身
 | `roster-change.ts` | 離班的孤兒資產強制重分配；故人進城（順手叫醒一樁睡著的秘密） |
 | `want-lifecycle.ts` | 心事的兩條出場道：`completion` 成立即 resolved、過 `dueDay` 即 foreclosed |
 | `background-needs.ts` | 生理需求降級：不具戲劇相關性的餓離場結算，上戲名額封頂 |
+| `state-rhythm.ts` | 作息節律：乏／飢按**故事時辰**結算而非按心跳——鏡像時制下同一時辰再打一拍不再加乏、未演繹的夜照樣歇息；另含白日在家空一拍的小憩回復 |
 | `vitals.ts` | 生命體徵：不可逆事件數／resolved 率／場景熵／收斂與迴圈偵測 |
 | `artifacts.ts` | 日記與詩詞，claim 需引用 beat 證據（含帳面漂移閘） |
 

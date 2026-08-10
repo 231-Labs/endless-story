@@ -661,6 +661,12 @@ export interface WorldStateData {
     /** 背景進食 — characterId → the day hunger was last settled offstage for them
      *  (once per day, so the demotion can never become a money leak). */
     backgroundFedDay?: Record<string, number>;
+    /** 作息節律 — the absolute 時辰 ordinal the daily-life state vector last
+     *  settled through (`core/state-rhythm.ts`). Mirror time makes ticks mere
+     *  heartbeats, so fatigue/hunger advance by STORY TIME crossed since this
+     *  mark, not per tick. Absent (fresh world / older snapshot) ⇒ the next tick
+     *  settles exactly its own 時辰, the pre-field behavior. */
+    stateSettledBucket?: number;
     /** 生命體徵滾動窗 — the last few ticks' externalised material, for the loop
      *  detector. Diagnostic only: nothing in the engine branches on it. */
     vitalsWindow?: Array<{ day: number; tick: number; samples: import('./core/vitals.ts').VitalsSample[] }>;
