@@ -244,6 +244,9 @@ export class RunnerSceneAgent implements SceneAgentPort {
             // One editor writes one POV, but it still needs immutable identity
             // facts for everybody that POV may mention.
             const prompt = eventDossier.buildClaimAuditPrompt(event, [source], perspectives);
+            // 同一個預算：prompt 要多少條、parser 收多少條、天花板夠寫幾條，都從
+            // 段數推出來，不能各自寫死一個數字。
+            const budget = eventDossier.subjectiveClaimBudget(source.body);
             let lastErrors: string[] = [];
             for (let attempt = 0; attempt < 2; attempt++) {
                 const response = await this.dossierClient!.chat({
@@ -253,12 +256,15 @@ export class RunnerSceneAgent implements SceneAgentPort {
                         role: 'user',
                         content: attempt === 0
                             ? prompt
-                            : `${prompt}\n\n【上次輸出未通過】\n${lastErrors.join('\n')}\n請重新輸出完整 JSON，必須有以角色姓名開頭的專屬 lead、1–4 個主觀 claim，並覆蓋每個 p:N。`,
+                            : `${prompt}\n\n【上次輸出未通過】\n${lastErrors.join('\n')}\n請重新輸出完整 JSON，必須有以角色姓名開頭的專屬 lead、最多 ${budget} 條主觀 claim，並覆蓋每個 p:N。`,
                     }],
-                    // 一份卷宗：24-52 字的專屬導語＋1-4 條 claim，每條帶 20-70 字的
-                    // editorialNote；寫滿就是四五百個中文字，1500 常剪在最後一條，
-                    // 而少一條就過不了 validateClaimAudit，白跑一次重試。
-                    maxTokens: 2400,
+                    // 一份卷宗：24-52 字的專屬導語＋每條 claim 帶 20-70 字的
+                    // editorialNote；四條就寫滿四五百個中文字，1500 常剪在最後一條，
+                    // 而少一條就過不了 validateClaimAudit，白跑一次重試。長 POV 的
+                    // claim 上限跟著段數長，天花板就得一起長，否則放寬的那幾條會改
+                    // 由 maxTokens 剪掉，症狀一模一樣。夾住上界是怕段數異常的 POV
+                    // 開出模型收不下的 max_tokens（reasoning 還會再吃一層）。
+                    maxTokens: Math.min(6000, 900 + budget * 380),
                     temperature: attempt === 0 ? 0.32 : 0.15,
                 });
                 const [curated] = eventDossier.applyClaimAudit(event, [source], response.text);

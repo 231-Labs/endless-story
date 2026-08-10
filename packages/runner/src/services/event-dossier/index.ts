@@ -9,4 +9,10 @@ export {
     type DossierPerspectiveSource,
     type DossierValidation,
 } from './compile.js';
-export { buildClaimAuditPrompt, applyClaimAudit, validateClaimAudit, diagnoseClaimAudit } from './claims.js';
+export {
+    buildClaimAuditPrompt,
+    applyClaimAudit,
+    validateClaimAudit,
+    diagnoseClaimAudit,
+    subjectiveClaimBudget,
+} from './claims.js';

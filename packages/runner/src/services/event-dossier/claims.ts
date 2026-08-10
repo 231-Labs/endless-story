@@ -15,6 +15,26 @@ function paragraphs(body: string): string[] {
     return povParagraphs(body);
 }
 
+/** Short POVs keep the historical headroom of four, which is more than bare
+ * coverage needs, so bodies that already passed keep passing unchanged. */
+const MIN_SUBJECTIVE_CLAIMS = 4;
+
+/** Cost guard for the claims the editor writes itself, on top of the anchor.
+ *
+ * `canonicalAnchor` is prepended separately and always maps to p:0, so the
+ * audited claims have to cover p:1..p:last on their own, worst case one claim
+ * per remaining paragraph. A flat cap smaller than that silently drops the claim
+ * carrying the trailing paragraphs and then `validateClaimAudit` fails the
+ * dossier for exactly the paragraphs that claim covered.
+ *
+ * The prompt, the parser cap in `applyClaimAudit`, and the coverage gate in
+ * `validateClaimAudit` all count paragraphs through the same `paragraphs()`
+ * helper and read their budget from here, so a POV can no longer be asked for
+ * fewer claims than the gate then demands. */
+export function subjectiveClaimBudget(body: string): number {
+    return Math.max(MIN_SUBJECTIVE_CLAIMS, paragraphs(body).length - 1);
+}
+
 function pronounForBody(bodyFact?: string): '他' | '她' {
     if (!bodyFact || bodyFact.includes('女')) return '她';
     return bodyFact.includes('男') ? '他' : '她';
@@ -29,23 +49,27 @@ export function buildClaimAuditPrompt(
     const cast = castCanon.map((p) =>
         `- ${p.characterName}｜${p.role ?? '行當未註明'}｜${p.bodyFact ?? '身不詳'}｜第三人稱「${pronounForBody(p.bodyFact)}」`,
     ).join('\n');
-    const povs = perspectives.map((p) => [
-        `## ${p.characterId}｜${p.characterName}`,
-        `不可更動的身／性別 canon：${p.bodyFact ?? '未註明'}；第三人稱代詞用「${pronounForBody(p.bodyFact)}」。`,
-        '可用私人來源：session（只證明這是 TA 的主觀 session，不證明內容為真）',
-        ...paragraphs(p.body).map((text, index) => `p:${index}｜${text}`),
-    ].join('\n')).join('\n\n');
+    const povs = perspectives.map((p) => {
+        const lines = paragraphs(p.body);
+        return [
+            `## ${p.characterId}｜${p.characterName}`,
+            `不可更動的身／性別 canon：${p.bodyFact ?? '未註明'}；第三人稱代詞用「${pronounForBody(p.bodyFact)}」。`,
+            `本卷宗共 ${lines.length} 段；p:0 已由系統的已錨定 claim 覆蓋，你最多可寫 ${subjectiveClaimBudget(p.body)} 條 claim，其餘各段一段都不能漏。`,
+            '可用私人來源：session（只證明這是 TA 的主觀 session，不證明內容為真）',
+            ...lines.map((text, index) => `p:${index}｜${text}`),
+        ].join('\n');
+    }).join('\n\n');
     return [
         '你是章回卷宗的認識論編輯，不是續寫作者。你要替每個角色完成兩件事：',
         '一、寫一句只屬於此人的 lead（24–52字，以角色姓名開頭，指出這個版本真正卡住的情感或誤讀；必須使用該 POV 的具體意象，不准套模板，不准改性別）。',
-        '二、從該 POV 提煉 1–4 個主觀 claim，逐一說明它與封存客觀層的關係；以最少 claim 完整覆蓋全部段落。系統會另加一條逐字來自客觀 beat 的「已錨定」claim，你不要代寫或重複它。',
+        '二、從該 POV 提煉主觀 claim，逐一說明它與封存客觀層的關係；以最少 claim 完整覆蓋全部段落，條數上限見各角色 POV 標頭。系統會另加一條逐字來自客觀 beat 的「已錨定」claim，你不要代寫或重複它。',
         '',
         '每個 claim 必須有：',
         '- text：角色實際主張了什麼，不是空泛的「這是主觀詮釋」。',
         '- mode：canonical|observed|heard|inferred|remembered|dreamed|fabricated。',
         '- relation：只能是 contradicts|reinterprets|unresolved。不要輸出 supports；已錨定的 supports 只由系統從客觀 beat 生成。',
         '- evidenceRefs：只能用 beat:N 或該角色自己的 session。',
-        '- passageRefs：此 claim 對應的 p:N；每一段 p:N 都至少要被一個 claim 覆蓋。',
+        '- passageRefs：此 claim 對應的 p:N，同一條可一次列多段；每一段 p:N 都至少要被一個 claim 覆蓋。',
         '- editorialNote：20–70字，具體說明「哪個客觀逐拍支持／牴觸它，或正史為何無法回答」；不得創造新事實。',
         '',
         '證據規則：',
@@ -182,7 +206,7 @@ export function applyClaimAudit(
         const passageClaimIds: Record<number, string[]> = {};
         if (anchor && sourceParagraphs.length) passageClaimIds[0] = [anchor.id];
 
-        for (const item of rawClaims.slice(0, 4)) {
+        for (const item of rawClaims.slice(0, subjectiveClaimBudget(source.body))) {
             if (!item || typeof item !== 'object') continue;
             const c = item as Record<string, unknown>;
             const text = typeof c.text === 'string' ? c.text.trim() : '';
@@ -252,6 +276,10 @@ export function validateClaimAudit(perspectives: DossierPerspectiveSource[]): st
             errors.push(`${prefix}: claim missing editorial note`);
         }
         const mapped = source.passageClaimIds ?? {};
+        // Stays a hard failure: a dossier that quietly loses a paragraph's claim
+        // degrades into generic 未定 markers. `subjectiveClaimBudget` is derived
+        // from this same paragraph list, so a complete audit can always pay for
+        // the coverage demanded here.
         paragraphs(source.body).forEach((_, index) => {
             if (!mapped[index]?.length) errors.push(`${prefix}: p:${index} has no audited claim`);
         });

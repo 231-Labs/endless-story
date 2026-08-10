@@ -6,7 +6,12 @@ import {
     parseDossierHeader,
     validateDossier,
 } from '../src/services/event-dossier/compile.ts';
-import { applyClaimAudit, buildClaimAuditPrompt, validateClaimAudit } from '../src/services/event-dossier/claims.ts';
+import {
+    applyClaimAudit,
+    buildClaimAuditPrompt,
+    subjectiveClaimBudget,
+    validateClaimAudit,
+} from '../src/services/event-dossier/claims.ts';
 
 const source = {
     event: {
@@ -241,4 +246,78 @@ test('audit keeps a third grounded claim when long POV needs it for passage cove
 
     assert.deepEqual(validateClaimAudit(enriched), []);
     assert.equal(enriched[0].claims?.length, 4, 'one canonical anchor plus three subjective claims');
+});
+
+/** A seven-paragraph POV whose trailing paragraphs ride on one shared claim.
+ * This is the shape that aborted 蘇映雪's dossier on the 2026-08-10 spring-snow
+ * run: a flat four-claim cap dropped the fifth claim, and the coverage gate then
+ * failed on exactly the two paragraphs that claim carried. */
+const sevenParagraphBody = [
+    '我先看見她的口形變了。',
+    '那不是定稿裡的句子。',
+    '鑼點慢了半拍，像也在等我決定。',
+    '我接了。',
+    '接的時候我沒想過台下。',
+    '散戲以後，班主沒有看我。',
+    '回房的路上，我才聽見自己心跳。',
+].join('\n\n');
+
+const sevenParagraphClaims = [
+    { text: '她認為柳生春改詞是衝著自己來的。', mode: 'inferred', relation: 'reinterprets', passageRefs: ['p:0', 'p:1'] },
+    { text: '她把慢下來的鑼點記成一次等待。', mode: 'inferred', relation: 'reinterprets', passageRefs: ['p:2'] },
+    { text: '她認為自己是主動接的，不是被推著接的。', mode: 'remembered', relation: 'reinterprets', passageRefs: ['p:3'] },
+    { text: '她相信那半拍裡沒有考慮過台下。', mode: 'inferred', relation: 'unresolved', passageRefs: ['p:4'] },
+    { text: '她把班主的不看視為責備。', mode: 'inferred', relation: 'reinterprets', passageRefs: ['p:5', 'p:6'] },
+].map((claim, index) => ({
+    ...claim,
+    evidenceRefs: claim.relation === 'unresolved' ? ['session'] : [`beat:${index % 3}`, 'session'],
+    editorialNote: '客觀逐拍只記下了動作與說出口的話，這一層意思只存在蘇映雪自己的理解裡。',
+}));
+
+test('claim budget scales with paragraph count so the cap cannot starve the coverage gate', () => {
+    const long = [{ ...source.perspectives[1], body: sevenParagraphBody }];
+    assert.equal(subjectiveClaimBudget(sevenParagraphBody), 6, 'anchor holds p:0, so the budget covers p:1..p:6');
+
+    const enriched = applyClaimAudit(source.event, long, JSON.stringify({
+        perspectives: [{
+            characterId: 'su',
+            lead: '蘇映雪把半拍的猶豫記成主動，直到班主別開眼才不確定自己接的是什麼。',
+            claims: sevenParagraphClaims,
+        }],
+    }));
+
+    assert.deepEqual(validateClaimAudit(enriched), [], 'p:5 and p:6 keep the claim that carries them');
+    assert.equal(enriched[0].claims?.length, 6, 'one canonical anchor plus all five audited claims survive');
+});
+
+test('the prompt asks for exactly the number of claims the parser will keep', () => {
+    const long = [{ ...source.perspectives[1], body: sevenParagraphBody }];
+    const prompt = buildClaimAuditPrompt(source.event, long, source.perspectives);
+    assert.match(prompt, /本卷宗共 7 段/);
+    assert.match(prompt, new RegExp(`最多可寫 ${subjectiveClaimBudget(sevenParagraphBody)} 條 claim`));
+    assert.doesNotMatch(prompt, /1–4 個主觀 claim/, 'no second hardcoded budget to drift from the parser cap');
+});
+
+test('the budget is still a cost guard: claims beyond it are dropped', () => {
+    const short = [source.perspectives[0]];
+    const budget = subjectiveClaimBudget(source.perspectives[0].body);
+    assert.equal(budget, 4, 'a one-paragraph POV keeps the historical floor');
+
+    const enriched = applyClaimAudit(source.event, short, JSON.stringify({
+        perspectives: [{
+            characterId: 'liu',
+            lead: '柳生春把臨時添唱當成出口，直到接唱聲讓那句話再也收不回來。',
+            claims: Array.from({ length: budget + 3 }, (_, index) => ({
+                text: `她對這一刻的第 ${index + 1} 層理解。`,
+                mode: 'inferred',
+                relation: 'reinterprets',
+                evidenceRefs: ['beat:0', 'session'],
+                passageRefs: ['p:0'],
+                editorialNote: '添唱可由第一拍核對，這一層意思只屬於柳生春自己的理解。',
+            })),
+        }],
+    }));
+
+    assert.equal(enriched[0].claims?.length, budget + 1, 'anchor plus the budget, extras dropped');
+    assert.deepEqual(validateClaimAudit(enriched), []);
 });
