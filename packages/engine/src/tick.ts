@@ -224,6 +224,56 @@ export interface TickOpts {
      *  to, not trail them). Observability only, same swallow-on-failure contract
      *  as onBeat. Absent ⇒ no move observation (backward compatible). */
     onMoves?: (moves: TickMoveObservation[]) => void;
+    /** 開卷 genesis 取材的併發上限（見 §1 GENESIS）。呼叫端不給就用
+     *  {@link DEFAULT_GENESIS_CONCURRENCY}；設 1 即回到逐角排隊的舊行為。
+     *  只影響等待時間，不影響結果：落地順序永遠是 cast 順序。 */
+    genesisConcurrency?: number;
+}
+
+/**
+ * 併發取材的預設上限 —— 實測定的，不是猜的（2026-08-10，genesis 尺寸呼叫）：
+ *
+ * | 併發 | Poe glm-4.7-flash-n (10 通) | Z.AI GLM-4.7-FlashX (10 通) |
+ * |------|------------------------------|------------------------------|
+ * | 1    | 169s                         | 145s                         |
+ * | 4    |  51s (3.3×)                  |  91s (1.6×)                  |
+ * | 8    |  20s (8.3×)                  |  62s (2.4×)                  |
+ *
+ * 兩家在同時 20 條之下都沒有回 429、沒有掉件。差別在於 **Z.AI 會在伺服器那頭
+ * 默默排隊**（加速比到 2.4× 就平了），Poe 則接近線性。所以八條是「Z.AI 已經
+ * 吃飽、Poe 還在線性」的那一點，再往上只有 Poe 受益，而班底本來也就十來人。
+ *
+ * 真撞到速率限制也不會壞事：429 是可重試錯誤，`chatWithFallback` 會退避重試，
+ * 最壞情況退化成比較慢，不是掉一個角色的心事。要保守就把
+ * `TickOpts.genesisConcurrency` 調小，設 1 即回到逐角排隊。
+ */
+export const DEFAULT_GENESIS_CONCURRENCY = 8;
+
+/**
+ * 以至多 `limit` 條並行跑完 `items`，**回傳順序與輸入一致**。
+ *
+ * 刻意寫在這裡而不抽成公用工具：引擎裡「一角一個 await」的地方不只這一處，
+ * 但每一處能不能併發，取決於它有沒有碰共享的有序狀態（want id、場景日誌）。
+ * 這支只保證「呼叫可以同時飛、結果照原序回來」，要不要用得逐處判斷。
+ */
+async function mapWithConcurrency<T, R>(
+    items: readonly T[],
+    limit: number,
+    fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+    const out = new Array<R>(items.length);
+    let cursor = 0;
+    const lanes = Math.max(1, Math.min(Math.floor(limit) || 1, items.length));
+    await Promise.all(
+        Array.from({ length: lanes }, async () => {
+            // `cursor++` 在 await 之間是原子的（單執行緒），所以每個索引只會被
+            // 一條 lane 認領一次。
+            for (let i = cursor++; i < items.length; i = cursor++) {
+                out[i] = await fn(items[i], i);
+            }
+        }),
+    );
+    return out;
 }
 
 /** One committed movement this tick — where a character was, and where the
@@ -536,20 +586,36 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     if (!night) {
         // 離班者不再長心事 —— the acting cast only. A departed member keeps their
         // name and memories but is off the board (see WorldState.activeCast).
-        for (const member of world.activeCast()) {
-            if (wants.some((x) => x.characterId === member.id && x.source === 'genesis')) continue;
-            const derived = await agent.deriveGenesisWants({
-                name: member.name,
-                role: member.role ?? '—',
-                gender: member.gender,
-                ageYears: member.age,
-                description: member.persona,
-                // The two fields production forgot to pass — the malnourished call site.
-                secret: member.secret,
-                sagaPremise: w.sagaPremise,
-                castNames: w.cast.map((x) => x.name),
-                contestedResources: w.contestedResources,
-            });
+        // 開卷第一拍，每個角色都要長心事，而這一步擋在世界說出第一句話的前面。
+        // 先前是一角一個 await 排隊跑：Poe 的 GLM-4.6 一次兩分鐘,十個角色就是二十
+        // 分鐘的全黑畫面(實測 建卷八分鐘後 genesis 才 4/10、拍流零拍)。這些呼叫
+        // 彼此完全獨立——A 的心事不看 B 的心事——排隊純粹是寫法造成的。
+        //
+        // 併發只放在**取材**（LLM 呼叫）這一段；落地那一段照原順序逐一跑，
+        // 因為 `world.nextWantId()` 是有序號的共享計數器，順序一亂 want id 就不
+        // 可重現，重播與溯源全毀。取材併發、落地照舊：快的是等待，不是機制。
+        const pendingGenesis = world
+            .activeCast()
+            .filter((member) => !wants.some((x) => x.characterId === member.id && x.source === 'genesis'));
+        const derivedPerMember = await mapWithConcurrency(
+            pendingGenesis,
+            opts.genesisConcurrency ?? DEFAULT_GENESIS_CONCURRENCY,
+            (member) =>
+                agent.deriveGenesisWants({
+                    name: member.name,
+                    role: member.role ?? '—',
+                    gender: member.gender,
+                    ageYears: member.age,
+                    description: member.persona,
+                    // The two fields production forgot to pass — the malnourished call site.
+                    secret: member.secret,
+                    sagaPremise: w.sagaPremise,
+                    castNames: w.cast.map((x) => x.name),
+                    contestedResources: w.contestedResources,
+                }),
+        );
+        for (const [index, member] of pendingGenesis.entries()) {
+            const derived = derivedPerMember[index];
             for (const g of derived) {
                 const declared = w.strictStructured
                     ? await declareStructuredWant(world, agent, {

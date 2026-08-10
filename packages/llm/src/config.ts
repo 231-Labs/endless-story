@@ -8,7 +8,7 @@
  *   ZAI_BASE_URL              — Z.AI base URL (default: 'https://api.z.ai/api/paas/v4')
  *   POE_API_KEY               — Poe API key (multi-provider via OpenAI-compat endpoint)
  *   POE_MODEL_PRIMARY         — Poe model for creative tasks (default: 'GLM-4.6')
- *   POE_MODEL_CHEAP           — Poe model for decisions / moderation (default: 'GLM-4.6')
+ *   POE_MODEL_CHEAP           — Poe model for decisions / moderation (default: 'glm-4.7-flash-n')
  *   ANTHROPIC_API_KEY         — direct Anthropic Claude key
  *   ANTHROPIC_MODEL_PRIMARY   — direct Anthropic model (default: 'claude-sonnet-4-6')
  *   ANTHROPIC_MODEL_CHEAP     — direct Anthropic cheap model (default: 'claude-haiku-4-5')
@@ -44,10 +44,14 @@ const DEFAULTS = {
   zaiModelPrimary: 'glm-5.1',
   zaiModelCheap: 'GLM-4.7-FlashX',
   zaiBaseUrl: 'https://api.z.ai/api/paas/v4',
-  // Poe: GLM-4.6 一路到底（成本紀律 — 生產部署明定只打 GLM-4.6；中文母語級、
-  // 長 context、武俠語境尤佳，primary 與 cheap 兩檔都夠用）。Override via POE_MODEL_*.
+  // Poe primary：GLM-4.6（成本紀律 — 生產部署明定只打 GLM 家族；中文母語級、
+  // 長 context、武俠語境尤佳）。Override via POE_MODEL_*.
   poeModelPrimary: 'GLM-4.6',
-  poeModelCheap: 'GLM-4.6',
+  // Poe cheap：glm-4.7-flash-n，仍在 GLM 家族內（成本紀律不破），但**不思考**。
+  // Poe 對 GLM 一律忽略關思考旗標，GLM-4.6 每次呼叫實測燒 1500-1800 個 reasoning
+  // token、要 35 秒；flash-n 的 reasoning_tokens 是 0、5.6 秒，內容長度相當。
+  // 決策／審核這一檔跑的是結構化判斷不是文筆，用不著那份思考稅。
+  poeModelCheap: 'glm-4.7-flash-n',
   anthropicModelPrimary: 'claude-sonnet-4-6',
   anthropicModelCheap: 'claude-haiku-4-5',
   aiProvider: 'auto' as AIProvider,

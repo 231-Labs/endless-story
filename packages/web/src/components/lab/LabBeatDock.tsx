@@ -341,7 +341,15 @@ export function LabBeatDock({
                                     );
                                 })}
                                 {!feed.length ? (
-                                    <p className="px-1 py-2 font-serif text-xs text-mute/70">尚無一拍。點「走一拍」，看世界自己動。</p>
+                                    // 正在走拍卻寫「尚無一拍。點『走一拍』」是在說謊：開卷第一拍
+                                    // 要先替每個角色長心事、再走完移步，才輪到場景迴圈推第一拍，
+                                    // 這中間拍流本來就是空的。照舊文案會讓一個正在跑的世界長得跟
+                                    // 當機一樣，而且反過來叫人再排一拍進佇列。
+                                    <p className="px-1 py-2 font-serif text-xs text-mute/70">
+                                        {running
+                                            ? '開鑼中。角色正在各自長出心事，第一拍要等上幾分鐘；細目看「錄」。'
+                                            : '尚無一拍。點「走一拍」，看世界自己動。'}
+                                    </p>
                                 ) : null}
                             </div>
                         </motion.div>

@@ -97,6 +97,15 @@ const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
  */
 export async function deriveGenesisWants(input: DeriveWantsInput): Promise<GenesisWant[]> {
     try {
+        // **primary，不要改成 cheap。** 這一步看起來像結構化填表（layer/desc/target/
+        // weight…），很容易被當成便宜檔的活兒，2026-08-10 試過，實測退回：
+        // 同一題各跑三次，cheap（GLM-4.7-FlashX）穩定地
+        //   ① 憑空編事實 —— 「去留自便」的信、『春桃』這齣戲、被罷黜的老師傅，輸入裡都沒有；
+        //   ② 弄錯身分 —— 兩次把戲班花旦寫成接「恩客」的人；
+        //   ③ 違反鐵則 5 —— target 填 `報上照片`、`頭牌名額` 這種不在名冊裡的東西。
+        // primary（glm-5.1）同一題全數守規矩、一律第一人稱、字數也守。
+        // genesis 是整卷的地基，錯的心事會污染之後每一拍，省那幾秒不划算。
+        // 開卷太慢的解法在呼叫端（tick.ts 的 genesis 併發取材），不是降檔。
         const client = llmText.createTextClient({ kind: 'primary' });
         const res = await client.chat({
             model: client.defaultModel,

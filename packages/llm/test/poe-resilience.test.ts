@@ -117,8 +117,13 @@ test('fallback 鏈上每一顆都在 registry 裡，且全在 GLM 家族內（�
   }
 });
 
-test('Poe 預設仍是成本紀律定的 GLM-4.6，兩檔都是', () => {
+test('Poe 兩檔預設都還在 GLM 家族內（成本紀律），cheap 換成不思考的那顆', () => {
   const cfg = loadLLMConfig();
   assert.equal(cfg.poeModelPrimary, 'GLM-4.6');
-  assert.equal(cfg.poeModelCheap, 'GLM-4.6');
+  // cheap 從 GLM-4.6 換成 flash-n：仍是 GLM（#213 的判決是「絕不滑向 Claude/GPT」，
+  // 不是「只准 4.6」），但 reasoning_tokens 從 1500-1800 降到 0、35s 降到 5.6s。
+  assert.equal(cfg.poeModelCheap, 'glm-4.7-flash-n');
+  for (const id of [cfg.poeModelPrimary, cfg.poeModelCheap]) {
+    assert.match(id.toLowerCase(), /^glm-/, `Poe 預設滑出 GLM 家族：${id}`);
+  }
 });

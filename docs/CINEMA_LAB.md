@@ -292,7 +292,7 @@ cookie（30 天），`/lab/*` 頁面與 `/api/lab/*` 全部驗同一把（API �
 |---|---|
 | `ZAI_API_KEY` 或 `POE_API_KEY` 或 `ANTHROPIC_API_KEY` | 實錄檔文字模型（排演檔不需要） |
 | `AI_PROVIDER` | `auto`（預設）/ `zai` / `poe` / `anthropic` |
-| `POE_MODEL_PRIMARY` / `POE_MODEL_CHEAP` | 選配：覆寫 Poe 模型。**留空最安全**，預設走成本紀律定的 `GLM-4.6` |
+| `POE_MODEL_PRIMARY` / `POE_MODEL_CHEAP` | 選配：覆寫 Poe 模型。**留空最安全**，預設 primary=`GLM-4.6`、cheap=`glm-4.7-flash-n`（都在 GLM 家族內） |
 | `CHARACTER_SESSION_KEY` | 選配：AES-256-GCM 加密角色 session 檔 |
 | `OPENAI_API_KEY` | 僅當開 `realEmbeddings`（召回用真向量）才需要 |
 
