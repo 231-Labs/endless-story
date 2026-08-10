@@ -6,6 +6,7 @@
  */
 
 import { text as llmText } from '@endless-story/llm';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 export interface RippleJudgeInput {
     sceneName: string;
@@ -21,19 +22,6 @@ export interface RippleJudgeDelta {
     newThread?: string;
     layer?: string;
     target?: string;
-}
-
-function extractJson(raw: string): Record<string, unknown> | null {
-    const blocks = raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            return JSON.parse(blocks[i]) as Record<string, unknown>;
-        } catch {
-            /* try an earlier block */
-        }
-    }
-    return null;
 }
 
 const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -56,10 +44,21 @@ export async function judgeRipples(input: RippleJudgeInput): Promise<RippleJudge
                 rosterLines +
                 '\n輸出 JSON：{"ripples":[{"name":"誰","shift":"tighten/loosen/none","newThread":"一件具體的新心事","layer":"層","target":"若指向某人"}]}。沒有新心事時必須完全省去 newThread 欄位，不可填「省略」「無」或其他佔位字。不要 markdown。',
             messages: [{ role: 'user', content: input.beats.join('\n') }],
-            maxTokens: 260,
+            // 至多三人，每人 name/shift/newThread(≤18字)/layer/target 五欄；
+            // 260 只夠兩人半，第三人常被剪掉（而空陣列是合法答案，看不出少了誰）。
+            maxTokens: 600,
             temperature: 0.5,
         });
-        const obj = extractJson(res.text);
+        const obj = extractJsonLoose(res.text);
+        if (wasTruncated(obj)) {
+            console.warn(`[want-ripple] 回話被剪斷，已撿回可用的部分（${input.sceneName}）`);
+        }
+        if (!obj) {
+            // 空陣列是合法答案（沒人被牽動），解析不到不是——兩者要分得清。
+            console.warn(
+                `[want-ripple] ${input.sceneName} 的牽動判不出來（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
+            );
+        }
         const arr = Array.isArray(obj?.ripples) ? (obj!.ripples as unknown[]) : [];
         const byName = new Map(input.roster.map((r) => [r.name, r.characterId]));
         const out: RippleJudgeDelta[] = [];

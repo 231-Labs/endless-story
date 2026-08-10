@@ -328,6 +328,8 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
     // 撈回來的一拍只認純字串欄位：修復器丟得掉殘缺的半個元素，卻分不出一個
     // 「看起來完整」的指令是不是原本還有下半段（objectId 有了、visibility 沒了，
     // 照樣過驗證）。半截的指令進了世界比沉默更糟，一律不收。
+    // 這裡不 console.warn：撈回一拍已由 scene-loop 記成卷上的 `[撈回]` 一行
+    // （比 stderr 更近讀的人），一件事喊兩次只是噪音。
     const truncated = wasTruncated(parsed);
     const str = (v: unknown): string => typeof v === 'string' ? v.trim() : '';
     const prose = (v: unknown): string => toTraditional(str(v));

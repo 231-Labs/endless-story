@@ -5,6 +5,7 @@
 import type { ClaimRelation, ClaimReview, NarrativeClaim } from '@endless-story/shared';
 import type { DossierCanonicalEvent, DossierPerspectiveSource } from './compile.js';
 import { povParagraphs } from '../narrative-format/pov-paragraphs.ts';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 const MODES = new Set(['canonical', 'observed', 'heard', 'inferred', 'remembered', 'dreamed', 'fabricated']);
 const SUBJECTIVE_RELATIONS = new Set(['contradicts', 'reinterprets', 'unresolved']);
@@ -69,19 +70,11 @@ export function buildClaimAuditPrompt(
     ].join('\n');
 }
 
-function extractJson(raw: string): Record<string, unknown> | null {
-    const blocks = raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try { return JSON.parse(blocks[i]) as Record<string, unknown>; } catch { /* try earlier block */ }
-    }
-    return null;
-}
-
 /** Safe production diagnostic: reports only response shape and closed aliases,
  * never the private POV prose, claim text, lead, or editorial copy. */
 export function diagnoseClaimAudit(raw: string): string {
-    const root = extractJson(raw);
+    // 診斷路徑不喊：它本來就是給人讀輸出形狀的，applyClaimAudit 已經喊過一次。
+    const root = extractJsonLoose(raw);
     const rows = Array.isArray(root?.perspectives) ? root.perspectives : [];
     return JSON.stringify(rows.map((row) => {
         if (!row || typeof row !== 'object') return { invalidRow: typeof row };
@@ -151,7 +144,12 @@ export function applyClaimAudit(
     perspectives: DossierPerspectiveSource[],
     raw: string,
 ): DossierPerspectiveSource[] {
-    const root = extractJson(raw);
+    const root = extractJsonLoose(raw);
+    if (wasTruncated(root)) {
+        // 撿回來的是前面幾個 POV；後面那幾個會落成沒有 lead、沒有 claim 的空卷宗，
+        // 而 validateClaimAudit 只會說「缺專屬導語」——不喊就查不出是被剪掉的。
+        console.warn(`[event-dossier] 回話被剪斷，已撿回可用的部分（${event.id}，共 ${perspectives.length} 份卷宗）`);
+    }
     const rows = Array.isArray(root?.perspectives) ? root!.perspectives : [];
     const byId = new Map<string, unknown>();
     for (const row of rows) {

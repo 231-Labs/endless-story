@@ -5,6 +5,7 @@
  */
 
 import { text as llmText } from '@endless-story/llm';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 export type DormantKind = 'character' | 'scene';
 
@@ -69,29 +70,24 @@ export function buildUserPrompt(input: MaterializeInput): string {
 }
 
 function parseEntity(raw: string, fallbackName: string): DormantEntity | null {
-    const blocks = raw.match(/\{[\s\S]*?\}(?=[^}]*$)/g) ?? raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            const o = JSON.parse(blocks[i]) as Record<string, unknown>;
-            const name = typeof o.name === 'string' && o.name.trim() ? o.name.trim() : fallbackName;
-            const kind: DormantKind = o.kind === 'scene' ? 'scene' : 'character';
-            const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 160) : undefined);
-            return {
-                name: name.slice(0, 40),
-                kind,
-                dormant: true,
-                role: str(o.role),
-                brief: str(o.brief),
-                relation: str(o.relation),
-                homeSagaHint: str(o.homeSagaHint),
-                sceneType: str(o.sceneType),
-            };
-        } catch {
-            /* try an earlier block */
-        }
+    const o = extractJsonLoose(raw);
+    if (wasTruncated(o)) {
+        console.warn(`[materialize] 回話被剪斷，已撿回可用的部分（${fallbackName}）`);
     }
-    return null;
+    if (!o) return null;
+    const name = typeof o.name === 'string' && o.name.trim() ? o.name.trim() : fallbackName;
+    const kind: DormantKind = o.kind === 'scene' ? 'scene' : 'character';
+    const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 160) : undefined);
+    return {
+        name: name.slice(0, 40),
+        kind,
+        dormant: true,
+        role: str(o.role),
+        brief: str(o.brief),
+        relation: str(o.relation),
+        homeSagaHint: str(o.homeSagaHint),
+        sceneType: str(o.sceneType),
+    };
 }
 
 /** No-throw: on miss, returns a bare dormant stub so the name still half-exists. */
@@ -105,11 +101,20 @@ export async function materializeMention(
             model: opts?.model ?? llm.defaultModel,
             system: buildSystemPrompt(),
             messages: [{ role: 'user', content: buildUserPrompt(input) }],
-            maxTokens: 320,
+            // role/brief/relation/homeSagaHint/sceneType 各可到 160 字，一個寫得
+            // 認真的休眠實體上看八百個中文字；320 只夠寫到小傳一半，退回的裸殼
+            // 等於這個名字白提了一次。
+            maxTokens: 800,
             temperature: 0.7,
         });
+        const entity = parseEntity(res.text, input.mention);
+        if (!entity) {
+            console.warn(
+                `[materialize] 「${input.mention}」推不出實體，退回裸殼（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
+            );
+        }
         return (
-            parseEntity(res.text, input.mention) ?? {
+            entity ?? {
                 name: input.mention.slice(0, 40),
                 kind: input.kindHint ?? 'character',
                 dormant: true,

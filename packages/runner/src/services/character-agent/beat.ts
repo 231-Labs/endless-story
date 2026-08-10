@@ -10,25 +10,13 @@
 import { text as llmText } from '@endless-story/llm';
 import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, safeSceneRevision, type ActBeatInput, type BeatResult } from './beat-prompt.js';
 import { formatPovSceneParagraphs, stripPovTitle } from '../narrative-format/pov-paragraphs.ts';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 import { toTraditional } from '@endless-story/shared/to-traditional';
 
 // Pure prompt surface (types + builders) lives in the node-clean leaf
 // `beat-prompt.ts`; re-exported here so the package surface is unchanged.
 export * from './beat-prompt.js';
 
-
-function extractJson(raw: string): Record<string, unknown> | null {
-    const blocks = raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            return JSON.parse(blocks[i]) as Record<string, unknown>;
-        } catch {
-            /* try an earlier block */
-        }
-    }
-    return null;
-}
 
 const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
@@ -48,7 +36,7 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
         // 480 太窄:中文一字常吃一到兩個 token,一句對白＋心下＋結構欄位很容易
         // 撞頂被剪斷,而截斷的 JSON 沒有收尾大括號 —— 整拍解析不到,角色當場沉默
         // (實錄:滿場沉默、偶爾一句)。寬到話說得完為止;真的還是被剪,
-        // salvageTruncatedBeat 再撈一次。
+        // infra/json-loose 再撈一次。
         maxTokens: input.consummate ? 1600 : 1100,
         temperature: 0.95,
     });
@@ -93,10 +81,13 @@ export async function judgeSceneIntimacy(input: JudgeIntimacyInput): Promise<Sce
                 '"consummate"=肌膚之親或雲雨。' +
                 '輸出 JSON：{"rating":"talk|tender|consummate"}。不要 markdown。',
             messages: [{ role: 'user', content: input.beats.join('\n') }],
+            // 只回一個三選一的字串，沒有散文；60 夠，放寬只是浪費。
             maxTokens: 60,
             temperature: 0.1,
         });
-        const o = extractJson(res.text) ?? {};
+        const parsed = extractJsonLoose(res.text);
+        if (wasTruncated(parsed)) console.warn('[beat] 回話被剪斷，已撿回可用的部分（親密分級）');
+        const o = parsed ?? {};
         const r = s(o.rating);
         if (r === 'talk' || r === 'tender' || r === 'consummate') return r;
         return 'consummate';
@@ -182,10 +173,17 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
                         `逐拍校訂，回同樣 ${input.beats.length} 拍。`,
                 },
             ],
-            maxTokens: 1400,
+            // 一場戲逐拍重寫：十來拍中文全文照抄一遍再改，一拍四十字就要六十上下
+            // 的 token，1400 只夠改到一半——而按 index 回貼的作法會讓被剪掉的那幾拍
+            // 靜靜保留原文，錯處看起來像沒改到。寬到整場改得完。
+            maxTokens: 2600,
             temperature: 0.4,
         });
-        const o = extractJson(res.text) ?? {};
+        const parsed = extractJsonLoose(res.text);
+        if (wasTruncated(parsed)) {
+            console.warn(`[beat] 回話被剪斷，已撿回可用的部分（校訂 ${input.beats.length} 拍，未撈回的保留原文）`);
+        }
+        const o = parsed ?? {};
         const arr = Array.isArray((o as { beats?: unknown }).beats) ? (o as { beats: unknown[] }).beats : null;
         if (!arr) return { beats: input.beats };
         // Map revised text back onto the original beats BY INDEX (names/order/inner
@@ -275,7 +273,9 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
                         `\n\n把今天在你（${input.name}）心裡過一遍。`,
                 },
             ],
-            maxTokens: 480,
+            // 題目要 80-200 字的中文散文；一字常吃一到兩個 token，480 剛好卡在
+            // 上限那一段，日記天天斷在半句（這條是純散文，斷了不會空手，但會爛尾）。
+            maxTokens: 900,
             temperature: 0.9,
         });
         return toTraditional(res.text.trim()) || null;
@@ -325,11 +325,15 @@ export async function judgeEstablished(input: JudgeEstablishedInput): Promise<bo
                         `\n此刻他們算不算已相許？`,
                 },
             ],
+            // 只回一個布林；60 夠。
             maxTokens: 60,
             temperature: 0.1,
         });
-        const o = extractJson(res.text) ?? {};
-        return o.established === true;
+        const parsed = extractJsonLoose(res.text);
+        if (wasTruncated(parsed)) {
+            console.warn(`[beat] 回話被剪斷，已撿回可用的部分（${input.aName}／${input.bName} 相許判定）`);
+        }
+        return parsed?.established === true;
     } catch {
         return false; // fail closed: no promotion on error
     }
@@ -411,7 +415,9 @@ export async function povScene(input: PovSceneInput): Promise<string | null> {
                     content: `【那一場的客觀經過】${input.clock}，${input.venue}${input.venueHint ? `（${input.venueHint}）` : ''}。\n${sceneText}\n\n輪到你（${input.name}）講你的版本。`,
                 },
             ],
-            maxTokens: 1200,
+            // 題目要四到六段第一人稱中文敘事，還得把整場客觀經過重講一遍；
+            // 六段八十字就已逼近 1200，讀者面的那一頁不該斷在半句。
+            maxTokens: 2000,
             temperature: 0.9,
         });
         return formatPovSceneParagraphs(stripPovTitle(toTraditional(res.text))) || null;
@@ -443,10 +449,16 @@ export async function judgeWantResolved(input: JudgeResolveInput): Promise<Resol
                     content: `心事主人：${input.name}\n心事：「${input.wantDesc}」\n\n這場戲的來回：\n${input.beats.join('\n')}`,
                 },
             ],
-            maxTokens: 160,
+            // 一個布林＋一句中文 note。160 撐得住短 note，但 note 一長就剪在
+            // 字串中途——修復器會把整個 note 丟掉，只剩布林（判對了卻沒了憑據）。
+            maxTokens: 300,
             temperature: 0.2,
         });
-        const o = extractJson(res.text) ?? {};
+        const parsed = extractJsonLoose(res.text);
+        if (wasTruncated(parsed)) {
+            console.warn(`[beat] 回話被剪斷，已撿回可用的部分（${input.name} 的不可逆裁判）`);
+        }
+        const o = parsed ?? {};
         return { resolved: o.resolved === true, note: s(o.note) || undefined };
     } catch {
         return { resolved: false };

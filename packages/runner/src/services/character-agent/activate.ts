@@ -6,6 +6,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import type { DormantEntity } from './materialize.js';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 export interface ActivateInput {
     dormant: DormantEntity;
@@ -69,30 +70,24 @@ export function buildUserPrompt(input: ActivateInput): string {
 }
 
 function parseActivated(raw: string, fallbackName: string): ActivatedCharacter | null {
-    const blocks = raw.match(/\{[\s\S]*?\}(?=[^}]*$)/g) ?? raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            const o = JSON.parse(blocks[i]) as Record<string, unknown>;
-            const realName = typeof o.realName === 'string' && o.realName.trim() ? o.realName.trim() : '';
-            if (!realName) continue;
-            const str = (v: unknown, n = 220) =>
-                typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : '';
-            const memories = Array.isArray(o.memories)
-                ? o.memories.filter((m): m is string => typeof m === 'string' && m.trim().length > 0).map((m) => m.trim().slice(0, 220)).slice(0, 8)
-                : [];
-            return {
-                realName: realName.slice(0, 24),
-                role: str(o.role, 60),
-                persona: str(o.persona),
-                physicalFacts: str(o.physicalFacts),
-                memories,
-            };
-        } catch {
-            /* try an earlier block */
-        }
+    const o = extractJsonLoose(raw);
+    if (wasTruncated(o)) {
+        console.warn(`[activate] 回話被剪斷，已撿回可用的部分（${fallbackName}）`);
     }
-    return null;
+    const realName = typeof o?.realName === 'string' && o.realName.trim() ? o.realName.trim() : '';
+    if (!realName) return null;
+    const str = (v: unknown, n = 220) =>
+        typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : '';
+    const memories = Array.isArray(o!.memories)
+        ? (o!.memories as unknown[]).filter((m): m is string => typeof m === 'string' && m.trim().length > 0).map((m) => m.trim().slice(0, 220)).slice(0, 8)
+        : [];
+    return {
+        realName: realName.slice(0, 24),
+        role: str(o!.role, 60),
+        persona: str(o!.persona),
+        physicalFacts: str(o!.physicalFacts),
+        memories,
+    };
 }
 
 /** No-throw: on miss, returns a thin activation carrying the seed memories forward. */
@@ -106,11 +101,20 @@ export async function activateDormant(
             model: opts?.model ?? llm.defaultModel,
             system: buildSystemPrompt(),
             messages: [{ role: 'user', content: buildUserPrompt(input) }],
-            maxTokens: 700,
+            // persona 與 physicalFacts 各可到 220 字，memories 收到八條、每條 220 字；
+            // 一個真被寫滿的激活近兩千個中文字，700 連小傳都寫不完，退回的薄殼會把
+            // 創建者寫進去的根原封不動端回去（看起來像激活成功，其實什麼都沒長）。
+            maxTokens: 2000,
             temperature: 0.8,
         });
+        const activated = parseActivated(res.text, input.dormant.name);
+        if (!activated) {
+            console.warn(
+                `[activate] ${input.dormant.name} 沒能激活成人，退回薄殼（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
+            );
+        }
         return (
-            parseActivated(res.text, input.dormant.name) ?? {
+            activated ?? {
                 realName: input.dormant.name.slice(0, 24),
                 role: input.dormant.role ?? input.homeSaga.name,
                 persona: input.dormant.brief ?? '',
