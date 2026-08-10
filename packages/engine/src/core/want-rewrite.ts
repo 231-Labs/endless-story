@@ -13,6 +13,15 @@
  */
 
 import { newWant, type Want, type WantSemanticTag, type WantSubjectRef } from './want-core.ts';
+// 破損 JSON 的修復解析：**共用一份**，不做鏡像。
+// runner 那份是全 repo 唯一的收口（十一個座席解析點都吃它），複製過來只會兩邊
+// 分岔——這次要治的病，起因正是同一行正規式被抄了十一份。
+// 為什麼 import 得動：`@endless-story/runner/infra/json-loose` 是 exports entry
+// 指到的**零 import 葉**，不帶 runner 慣用的 `.js` 指名，因此在光禿禿的
+// `node --test`（engine 的測試跑法）底下也解得到。engine 已經以同樣手法吃
+// `@endless-story/runner/services/character-agent/beat-prompt`。代價寫在該檔
+// 檔頭：那個葉子永遠不准新增 import。
+import { extractJsonLoose, wasTruncated } from '@endless-story/runner/infra/json-loose';
 
 /** One decision about a single existing want after a scene/action closes. */
 export interface RewriteDecision {
@@ -132,19 +141,20 @@ export interface LedgerEvent {
 
 const ROMANTIC_HOSTILE = /愛|情|戀|慕|恨|妒|怨|敵|仇|虧|愧|償/;
 
-/** Best-effort JSON extraction from a possibly-noisy LLM reply (last valid
- *  brace-block wins). Shared by adapters that call an LLM for the reply. */
+/**
+ * Best-effort JSON extraction from a possibly-noisy LLM reply. Shared by adapters
+ * that call an LLM for the reply.
+ *
+ * 完整區塊優先；真被 max_tokens 剪斷就丟掉殘缺的半個 decision、補回欠缺的括號，
+ * 把已經寫完的那幾個決定撿回來——ledger 的重寫是逐條獨立的，少一條好過整批落空
+ * （落空＝這個角色的心事一夜沒動，看起來像 TA 沒在活）。
+ */
 export function extractRewriteJson(raw: string): Record<string, unknown> | null {
-    const blocks = raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            return JSON.parse(blocks[i]) as Record<string, unknown>;
-        } catch {
-            /* try an earlier block */
-        }
+    const parsed = extractJsonLoose(raw);
+    if (wasTruncated(parsed)) {
+        console.warn('[want-rewrite] 回話被剪斷，已撿回可用的部分');
     }
-    return null;
+    return parsed;
 }
 
 /** Coerce a raw parsed object into a validated RewriteReply. */

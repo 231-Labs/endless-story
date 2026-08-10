@@ -7,6 +7,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 export interface DecideConfessInput {
     name: string;
@@ -74,29 +75,21 @@ export function buildUserPrompt(input: DecideConfessInput): string {
         .join('\n');
 }
 
-function parseConfess(raw: string, toName: string): ConfessResult | null {
-    // Take the last balanced {...} (a leaked think block can carry its own braces).
-    const blocks = raw.match(/\{[\s\S]*?\}(?=[^}]*$)/g) ?? raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            const o = JSON.parse(blocks[i]) as Partial<ConfessResult>;
-            if (typeof o.confess === 'boolean') {
-                return {
-                    confess: o.confess,
-                    toName,
-                    motive: typeof o.motive === 'string' ? o.motive.trim().slice(0, 200) : '',
-                    opening:
-                        typeof o.opening === 'string' && o.opening.trim()
-                            ? o.opening.trim().slice(0, 120)
-                            : undefined,
-                };
-            }
-        } catch {
-            /* try an earlier block */
-        }
+function parseConfess(raw: string, name: string, toName: string): ConfessResult | null {
+    const o = extractJsonLoose(raw);
+    if (wasTruncated(o)) {
+        console.warn(`[confess] 回話被剪斷，已撿回可用的部分（${name}→${toName}）`);
     }
-    return null;
+    if (typeof o?.confess !== 'boolean') return null;
+    return {
+        confess: o.confess,
+        toName,
+        motive: typeof o.motive === 'string' ? o.motive.trim().slice(0, 200) : '',
+        opening:
+            typeof o.opening === 'string' && o.opening.trim()
+                ? o.opening.trim().slice(0, 120)
+                : undefined,
+    };
 }
 
 /** No-throw: a parse miss / model error reads as "not yet" (confess=false), the safe default. */
@@ -110,11 +103,20 @@ export async function decideConfessAction(
             model: opts?.model ?? llm.defaultModel,
             system: buildSystemPrompt(),
             messages: [{ role: 'user', content: buildUserPrompt(input) }],
-            maxTokens: 320,
+            // motive ≤200 字、opening ≤120 字，兩段中文合起來三百多字；320 幾乎
+            // 必然剪在 opening（而「說開」是里程碑，剪掉就退回 false 當沒發生）。
+            maxTokens: 800,
             temperature: 0.8,
         });
+        const parsed = parseConfess(res.text, input.name, input.toName);
+        if (!parsed) {
+            // 「還不說」是拿不到答案時補的殼，不是 TA 決定的忍住。
+            console.warn(
+                `[confess] ${input.name}→${input.toName} 判不出說不說（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
+            );
+        }
         return (
-            parseConfess(res.text, input.toName) ?? {
+            parsed ?? {
                 confess: false,
                 toName: input.toName,
                 motive: '（一時拿不定主意，先按下不表）',

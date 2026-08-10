@@ -7,6 +7,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 /** Who has to say yes: all the system needs to route a proposal. */
 export type ProposalScope = 'self' | 'pair' | 'troupe';
@@ -87,32 +88,26 @@ export function buildUserPrompt(input: DecideProposalInput): string {
         .join('\n');
 }
 
-function parseProposal(raw: string): ProposalResult | null {
-    const blocks = raw.match(/\{[\s\S]*?\}(?=[^}]*$)/g) ?? raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            const o = JSON.parse(blocks[i]) as Record<string, unknown>;
-            if (typeof o.hasProposal !== 'boolean') continue;
-            if (!o.hasProposal) return { hasProposal: false };
-            const proposal = typeof o.proposal === 'string' ? o.proposal.trim() : '';
-            if (!proposal) continue;
-            const scope = SCOPES.has(o.scope as ProposalScope) ? (o.scope as ProposalScope) : 'self';
-            const targets = Array.isArray(o.targets)
-                ? o.targets.filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
-                : [];
-            return {
-                hasProposal: true,
-                proposal: proposal.slice(0, 160),
-                scope,
-                targets,
-                motive: typeof o.motive === 'string' ? o.motive.trim().slice(0, 160) : '',
-            };
-        } catch {
-            /* try an earlier block */
-        }
+function parseProposal(raw: string, name: string): ProposalResult | null {
+    const o = extractJsonLoose(raw);
+    if (wasTruncated(o)) {
+        console.warn(`[proposal] 回話被剪斷，已撿回可用的部分（${name}）`);
     }
-    return null;
+    if (typeof o?.hasProposal !== 'boolean') return null;
+    if (!o.hasProposal) return { hasProposal: false };
+    const proposal = typeof o.proposal === 'string' ? o.proposal.trim() : '';
+    if (!proposal) return null;
+    const scope = SCOPES.has(o.scope as ProposalScope) ? (o.scope as ProposalScope) : 'self';
+    const targets = Array.isArray(o.targets)
+        ? (o.targets as unknown[]).filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+        : [];
+    return {
+        hasProposal: true,
+        proposal: proposal.slice(0, 160),
+        scope,
+        targets,
+        motive: typeof o.motive === 'string' ? o.motive.trim().slice(0, 160) : '',
+    };
 }
 
 /** No-throw: a miss reads as "nothing to propose" rather than inventing one. */
@@ -126,10 +121,19 @@ export async function decideProposalAction(
             model: opts?.model ?? llm.defaultModel,
             system: buildSystemPrompt(),
             messages: [{ role: 'user', content: buildUserPrompt(input) }],
-            maxTokens: 320,
+            // proposal ≤160 字＋motive ≤160 字＋名單，三百多個中文字；320 剪在
+            // motive，而 motive 缺了整條提議就作廢（退回「沒有想促成的事」）。
+            maxTokens: 800,
             temperature: 0.85,
         });
-        return parseProposal(res.text) ?? { hasProposal: false };
+        const parsed = parseProposal(res.text, input.name);
+        if (!parsed) {
+            // 「沒有提議」是合法答案（hasProposal:false），解析不到不是。
+            console.warn(
+                `[proposal] ${input.name} 的提議解不出來（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
+            );
+        }
+        return parsed ?? { hasProposal: false };
     } catch {
         return { hasProposal: false };
     }

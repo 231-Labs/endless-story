@@ -6,6 +6,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint, type RelationshipTone } from '@endless-story/shared';
+import { extractJsonLoose, wasTruncated } from '../../infra/json-loose.ts';
 
 export interface GovernanceProposal {
     proposer: string;
@@ -75,24 +76,17 @@ export function buildUserPrompt(input: DecideGovernanceInput): string {
         .join('\n');
 }
 
-function parseGovernance(raw: string): GovernanceResult | null {
-    const blocks = raw.match(/\{[\s\S]*?\}(?=[^}]*$)/g) ?? raw.match(/\{[\s\S]*\}/g);
-    if (!blocks?.length) return null;
-    for (let i = blocks.length - 1; i >= 0; i--) {
-        try {
-            const o = JSON.parse(blocks[i]) as Partial<GovernanceResult>;
-            if (typeof o.direction === 'string' && o.direction.trim()) {
-                return {
-                    direction: o.direction.trim().slice(0, 160),
-                    adopted: typeof o.adopted === 'string' ? o.adopted.trim().slice(0, 60) : '自主',
-                    reasoning: typeof o.reasoning === 'string' ? o.reasoning.trim().slice(0, 220) : '',
-                };
-            }
-        } catch {
-            /* try an earlier block */
-        }
+function parseGovernance(raw: string, manager: string): GovernanceResult | null {
+    const o = extractJsonLoose(raw);
+    if (wasTruncated(o)) {
+        console.warn(`[governance] 回話被剪斷，已撿回可用的部分（班主 ${manager}）`);
     }
-    return null;
+    if (typeof o?.direction !== 'string' || !o.direction.trim()) return null;
+    return {
+        direction: o.direction.trim().slice(0, 160),
+        adopted: typeof o.adopted === 'string' ? o.adopted.trim().slice(0, 60) : '自主',
+        reasoning: typeof o.reasoning === 'string' ? o.reasoning.trim().slice(0, 220) : '',
+    };
 }
 
 /** No-throw: a parse miss / model error reads as hold-steady (守成), the safe default. */
@@ -106,11 +100,20 @@ export async function decideGovernanceAction(
             model: opts?.model ?? llm.defaultModel,
             system: buildSystemPrompt(input),
             messages: [{ role: 'user', content: buildUserPrompt(input) }],
-            maxTokens: 400,
+            // direction ≤160 字、adopted ≤60 字、reasoning ≤220 字，合起來近四百個
+            // 中文字；一字常吃一到兩個 token，400 連 direction 都寫不完。
+            maxTokens: 1000,
             temperature: 0.8,
         });
+        const parsed = parseGovernance(res.text, input.manager);
+        if (!parsed) {
+            // 「守成」是拿不到答案時補的殼，不是班主定的方向——不喊就看不出差別。
+            console.warn(
+                `[governance] ${input.manager} 沒能定出方向，退回守成（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
+            );
+        }
         return (
-            parseGovernance(res.text) ?? {
+            parsed ?? {
                 direction: '先守成，撐過這陣子再說',
                 adopted: '自主',
                 reasoning: '（一時拿不定，先穩住）',
