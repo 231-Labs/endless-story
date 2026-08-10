@@ -13,6 +13,14 @@
  * 修復過的結果會標記 `__truncated`，呼叫端要據此喊出聲——**修得回來不等於
  * 沒事**，連著出現就是該把 maxTokens 放寬了。
  *
+ * 第二種落空跟剪斷無關，長得卻一模一樣：**回話裡多出第二對大括號**。取區塊的
+ * 那行 `raw.match(/\{[\s\S]*\}/g)` 是貪婪的，永遠只吐一塊，從第一個 `{` 一路
+ * 吃到最後一個 `}`。模型收尾補一句「（格式為 {"wants":[...]}）」、開頭先示範
+ * 一個空殼、或先草稿後定稿，那一塊就橫跨兩段東西必定解不開；而括號是齊的，
+ * 修復器又當它「不是截斷」直接放手，於是整段落空，連截斷警告都不會響。實錄：
+ * 蘇映雪 genesis 零心事，回話開頭第一件心事明明寫得好好的。改成逐字掃出真正的
+ * 頂層區塊（字串裡的括號不算數），由後往前試。
+ *
  * **此檔不得新增任何 import。** 它是跨套件共用的葉：engine 的 core（含 barrel）
  * 靠 exports entry `@endless-story/runner/infra/json-loose` 直接吃它，而 engine
  * 的測試跑在光禿禿的 `node --test` 上——runner 其餘檔案慣用的 `.js` 指名在那裡
@@ -50,6 +58,37 @@ function scan(text: string): Scan {
     return { closers, inString, lastSafe };
 }
 
+interface Block {
+    start: number;
+    /** 收尾大括號的位置。null＝這一塊沒收尾，也就是被剪斷的那一塊（只會是最後一塊）。 */
+    end: number | null;
+}
+
+/** 切出回話裡每一個頂層大括號區塊；字串裡的括號不算數（見檔頭第二種落空）。 */
+function topLevelBlocks(raw: string): Block[] {
+    const out: Block[] = [];
+    let depth = 0;
+    let start = -1;
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < raw.length; i++) {
+        const ch = raw[i];
+        if (escaped) { escaped = false; continue; }
+        if (ch === '\\') { escaped = true; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (ch === '{') {
+            if (depth === 0) start = i;
+            depth++;
+        } else if (ch === '}' && depth > 0) {
+            depth--;
+            if (depth === 0) { out.push({ start, end: i }); start = -1; }
+        }
+    }
+    if (depth > 0) out.push({ start, end: null });
+    return out;
+}
+
 /** 補完被剪斷的 JSON：丟掉殘缺的那半個元素，再由內而外補上欠缺的括號。 */
 function repairTruncated(fragment: string): string | null {
     const full = scan(fragment);
@@ -66,27 +105,51 @@ function repairTruncated(fragment: string): string | null {
     return body.replace(/[\s,]*$/, '') + kept.closers.reverse().join('');
 }
 
-/**
- * 從模型的回話裡取出 JSON 物件。完整的優先；真的被剪斷才修復，並標記
- * `__truncated`。都不成立回 null（那是真的什麼都沒有，與「剪斷」不同事）。
- */
-export function extractJsonLoose(raw: string): Record<string, unknown> | null {
-    const blocks = raw.match(/\{[\s\S]*\}/g);
-    if (blocks?.length) {
-        for (let i = blocks.length - 1; i >= 0; i--) {
-            try { return JSON.parse(blocks[i]) as Record<string, unknown>; } catch { /* 換更早的區塊 */ }
-        }
-    }
-    const start = raw.indexOf('{');
-    if (start < 0) return null;
-    const repaired = repairTruncated(raw.slice(start));
-    if (!repaired) return null;
+function parseExact(text: string): Record<string, unknown> | null {
     try {
-        const parsed = JSON.parse(repaired) as Record<string, unknown>;
-        return { ...parsed, [TRUNCATED_MARK]: true };
+        return JSON.parse(text) as Record<string, unknown>;
     } catch {
         return null;
     }
+}
+
+/**
+ * 修一塊沒收尾的區塊；修得成才標記。修不成、或修出一個空殼（回話收尾又起了個
+ * 頭就斷了，撿到的只有一對括號）都回 null，好讓呼叫端退回更早那塊真的有東西的。
+ */
+function parseRepaired(fragment: string): Record<string, unknown> | null {
+    const repaired = repairTruncated(fragment);
+    if (!repaired) return null;
+    const parsed = parseExact(repaired);
+    if (!parsed || Object.keys(parsed).length === 0) return null;
+    return { ...parsed, [TRUNCATED_MARK]: true };
+}
+
+/**
+ * 從模型的回話裡取出 JSON 物件。由後往前取第一塊拿得出東西的；被剪斷的那塊
+ * 修完會標記 `__truncated`。都不成立回 null（那是真的什麼都沒有，與「剪斷」
+ * 不同事）。
+ */
+export function extractJsonLoose(raw: string): Record<string, unknown> | null {
+    const blocks = topLevelBlocks(raw);
+    // 由後往前，因為答案總在後面：模型先示範格式再給答案是常態，反過來不是。
+    // 「收尾齊全的優先」不能拿來當順序，那會讓開頭的示範空殼贏過後面被剪斷的
+    // 真答案（先示範再給答案、答案又剛好被剪斷，正是兩個病一起發作的樣子）。
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        const b = blocks[i];
+        const parsed =
+            b.end === null ? parseRepaired(raw.slice(b.start)) : parseExact(raw.slice(b.start, b.end + 1));
+        if (parsed) return parsed;
+    }
+    // 以下兩步是舊寫法的原樣保留，接住掃描器會看走眼的回話：散文裡出現落單的
+    // 半形引號時，引號之後整段會被當成字串，真正的區塊就被漏掉了。
+    const span = raw.match(/\{[\s\S]*\}/);
+    if (span) {
+        const parsed = parseExact(span[0]);
+        if (parsed) return parsed;
+    }
+    const start = raw.indexOf('{');
+    return start < 0 ? null : parseRepaired(raw.slice(start));
 }
 
 /** 這份結果是修復來的嗎（呼叫端據此記一行日誌）。 */

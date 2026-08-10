@@ -88,14 +88,24 @@ export function buildUserPrompt(input: DeriveWantsInput): string {
 const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 /**
- * Derive genesis wants for one character. Returns [] on any failure (caller
- * may retry next tick; a character without wants simply idles).
+ * 空手時的冷讀線索：長度＋頭尾各一段。
  *
- * 空手不是合法答案：題目就寫著 3-5 件，一件都沒有必然是解析或回話出事。
- * 這裡一定喊出聲——沒有心事的角色無事可做，滿場 `action noop`，世界靜止，
- * 而呼叫端只看得見一個空陣列（實錄：12 個角色 0 genesis、liveWants 0）。
+ * 先前只印開頭 120 字。開頭那 120 字**永遠**看起來像被剪斷（那是切片的邊界，
+ * 不是回話的邊界），於是實錄拿到手也判不出到底是剪斷、是收尾多補了一句閒話、
+ * 還是整段都不是 JSON。尾巴才是分得出來的那一段。
  */
-export async function deriveGenesisWants(input: DeriveWantsInput): Promise<GenesisWant[]> {
+function replyClue(text: string): string {
+    const flat = (t: string): string => t.replace(/\s+/g, ' ').trim();
+    const head = flat(text.slice(0, 100));
+    const tail = text.length > 220 ? `｜結尾：${flat(text.slice(-100))}` : '';
+    return `${text.length} 字｜開頭：${head}${tail}`;
+}
+
+/** 一次取材。空手時附上線索，交給呼叫端決定要不要再要一次。 */
+async function deriveOnce(
+    input: DeriveWantsInput,
+    maxTokens: number,
+): Promise<{ wants: GenesisWant[]; clue: string }> {
     try {
         // **primary，不要改成 cheap。** 這一步看起來像結構化填表（layer/desc/target/
         // weight…），很容易被當成便宜檔的活兒，2026-08-10 試過，實測退回：
@@ -111,10 +121,7 @@ export async function deriveGenesisWants(input: DeriveWantsInput): Promise<Genes
             model: client.defaultModel,
             system: buildSystemPrompt(),
             messages: [{ role: 'user', content: buildUserPrompt(input) }],
-            // 3-5 件心事，每件都要 layer/desc/target/resource/weight/sat/resistance
-            // ＋一句 why；中文一字常吃一到兩個 token，700 幾乎必然剪在第三、四件
-            // 中途。寬到五件連 why 都寫得完為止（一角一生只跑一次，貴得起）。
-            maxTokens: 1600,
+            maxTokens,
             temperature: 0.7,
         });
         const wants = parseGenesisWants(
@@ -123,17 +130,42 @@ export async function deriveGenesisWants(input: DeriveWantsInput): Promise<Genes
             input.contestedResources?.map((r) => r.label),
             input.name,
         );
-        if (wants.length === 0) {
-            // 附上回話開頭：冷讀時要一眼分得出「模型交白卷」「不是 JSON」「配額打回」。
-            console.warn(
-                `[want-genesis] ${input.name} 一件心事都沒長出來（回話開頭：${res.text.slice(0, 120).replace(/\s+/g, ' ')}）`,
-            );
-        }
-        return wants;
+        return { wants, clue: wants.length ? '' : replyClue(res.text) };
     } catch (err) {
-        console.warn('[want-genesis] derive failed:', err instanceof Error ? err.message : err);
-        return [];
+        return { wants: [], clue: `呼叫失敗：${err instanceof Error ? err.message : String(err)}` };
     }
+}
+
+// 3-5 件心事，每件都要 layer/desc/target/resource/weight/sat/resistance ＋一句
+// why；中文一字常吃一到兩個 token。700 必然剪在第三、四件中途，而 1600 也還是
+// 剪得到：五件寫滿、why 又各寫一句實話（「班規禁伶人私情，說破即失飯碗」這種
+// 長度），本文就逼近額度上限了。一角一生只跑一次，貴得起，直接給到寫得完為止。
+const GENESIS_MAX_TOKENS = 2600;
+// 再要一次時給得更寬：第一次空手最常見的成因就是話太長被剪在第一件裡（撿都
+// 沒得撿）。多這一次的成本是一角一次，換掉的是一個整卷無事可做的角色。
+const GENESIS_RETRY_MAX_TOKENS = 3600;
+
+/**
+ * Derive genesis wants for one character. Returns [] on any failure (caller
+ * may retry next tick; a character without wants simply idles).
+ *
+ * 空手不是合法答案：題目就寫著 3-5 件，一件都沒有必然是解析或回話出事。
+ * 這裡一定喊出聲——沒有心事的角色無事可做，滿場 `action noop`，世界靜止，
+ * 而呼叫端只看得見一個空陣列（實錄：12 個角色 0 genesis、liveWants 0）。
+ *
+ * 而且喊完要**再要一次**。genesis 一角一生只跑這麼一次，落空的角色不是「這拍
+ * 沒動作」而是整卷都沒有內在驅力，等同缺席（實錄 2026-08-10 春雪：十個角色九個
+ * 長出心事，蘇映雪零件，往後每一拍她都只能站著）。
+ */
+export async function deriveGenesisWants(input: DeriveWantsInput): Promise<GenesisWant[]> {
+    const first = await deriveOnce(input, GENESIS_MAX_TOKENS);
+    if (first.wants.length) return first.wants;
+    console.warn(`[want-genesis] ${input.name} 一件心事都沒長出來，再要一次（${first.clue}）`);
+    const second = await deriveOnce(input, GENESIS_RETRY_MAX_TOKENS);
+    if (second.wants.length === 0) {
+        console.warn(`[want-genesis] ${input.name} 兩次都空手，這個角色整卷無事可做（${second.clue}）`);
+    }
+    return second.wants;
 }
 
 export interface AffinityInput {
